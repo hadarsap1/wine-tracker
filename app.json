@@ -1,30 +1,45 @@
 {
   "expo": {
-    "name": "wine-tracker",
+    "name": "Wine Tracker",
     "slug": "wine-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "scheme": "winetracker",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1a1a2e"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.winetracker.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Wine Tracker needs camera access to scan wine labels and receipts.",
+        "NSPhotoLibraryUsageDescription": "Wine Tracker needs photo library access to import wine label and receipt images."
+      }
     },
     "android": {
+      "package": "com.winetracker.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1a1a2e",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-image-picker",
+      "expo-secure-store"
+    ]
   }
 }
