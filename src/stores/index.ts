@@ -1,2 +1,1 @@
-// Wine Tracker - Zustand stores barrel export
-export {};
+export { useAuthStore, type AuthStore } from "./authStore";
