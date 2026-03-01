@@ -33,6 +33,10 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Cloud Functions build output
+functions/lib/
+functions/node_modules/
+
 # typescript
 *.tsbuildinfo
 
