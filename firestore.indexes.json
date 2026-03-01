@@ -1,4 +1,36 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "inventoryItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "wineType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diaryEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "wineType", "order": "ASCENDING" },
+        { "fieldPath": "tastingDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diaryEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "rating", "order": "DESCENDING" },
+        { "fieldPath": "tastingDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wines",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "nameNormalized", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
