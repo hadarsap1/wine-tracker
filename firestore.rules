@@ -3,15 +3,173 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // User profiles — only the owner can read/write
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Household data — only household members can read/write
-    match /households/{householdId}/{document=**} {
-      allow read, write: if request.auth != null
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isMember(householdId) {
+      return isSignedIn()
         && exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
+    }
+
+    function isAdmin(householdId) {
+      return isMember(householdId)
+        && get(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function incomingData() {
+      return request.resource.data;
+    }
+
+    function isValidString(field) {
+      return field is string && field.size() > 0;
+    }
+
+    function isValidWineType(val) {
+      return val in ['Red', 'White', 'Rosé', 'Sparkling', 'Dessert', 'Fortified', 'Orange', 'Other'];
+    }
+
+    function isValidRating(val) {
+      return val is int && val >= 1 && val <= 5;
+    }
+
+    function isValidReceiptStatus(val) {
+      return val in ['pending', 'processing', 'parsed', 'confirmed', 'error'];
+    }
+
+    // ── /users/{userId} ───────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && incomingData().uid == userId
+        && isValidString(incomingData().email)
+        && isValidString(incomingData().displayName)
+        && incomingData().householdIds is list
+        && incomingData().preferences is map;
+
+      allow update: if isOwner(userId)
+        && incomingData().uid == userId;
+
+      allow delete: if false;
+    }
+
+    // ── /households/{householdId} ─────────────────────────────────────────
+
+    match /households/{householdId} {
+      allow read: if isMember(householdId);
+
+      allow create: if isSignedIn()
+        && isValidString(incomingData().name)
+        && incomingData().createdBy == request.auth.uid
+        && incomingData().memberCount is int;
+
+      allow update: if isAdmin(householdId)
+        && isValidString(incomingData().name);
+
+      allow delete: if isAdmin(householdId);
+
+      // ── /households/{householdId}/members/{memberId} ──────────────────
+
+      match /members/{memberId} {
+        allow read: if isMember(householdId);
+
+        // Admin can add members; creator can bootstrap their own membership
+        allow create: if isSignedIn()
+          && (isAdmin(householdId) || incomingData().userId == request.auth.uid)
+          && isValidString(incomingData().displayName)
+          && isValidString(incomingData().email)
+          && incomingData().role in ['admin', 'member'];
+
+        allow update: if isAdmin(householdId)
+          && incomingData().role in ['admin', 'member'];
+
+        // Admin can remove members; members can remove themselves
+        allow delete: if isAdmin(householdId) || isOwner(memberId);
+      }
+
+      // ── /households/{householdId}/wines/{wineId} ──────────────────────
+
+      match /wines/{wineId} {
+        allow read: if isMember(householdId);
+
+        allow create: if isMember(householdId)
+          && isValidString(incomingData().name)
+          && isValidString(incomingData().nameNormalized)
+          && isValidWineType(incomingData().type);
+
+        allow update: if isMember(householdId)
+          && isValidString(incomingData().name)
+          && isValidWineType(incomingData().type);
+
+        allow delete: if isAdmin(householdId);
+      }
+
+      // ── /households/{householdId}/inventoryItems/{itemId} ─────────────
+
+      match /inventoryItems/{itemId} {
+        allow read: if isMember(householdId);
+
+        allow create: if isMember(householdId)
+          && isValidString(incomingData().wineId)
+          && isValidString(incomingData().wineName)
+          && isValidWineType(incomingData().wineType)
+          && incomingData().quantity is int
+          && incomingData().quantity >= 0;
+
+        allow update: if isMember(householdId)
+          && incomingData().quantity is int
+          && incomingData().quantity >= 0;
+
+        allow delete: if isMember(householdId);
+      }
+
+      // ── /households/{householdId}/diaryEntries/{entryId} ──────────────
+
+      match /diaryEntries/{entryId} {
+        allow read: if isMember(householdId);
+
+        allow create: if isMember(householdId)
+          && isValidString(incomingData().wineId)
+          && isValidString(incomingData().wineName)
+          && isValidWineType(incomingData().wineType)
+          && isValidRating(incomingData().rating)
+          && incomingData().imageUrls is list;
+
+        allow update: if isMember(householdId)
+          && isValidRating(incomingData().rating);
+
+        allow delete: if isMember(householdId);
+      }
+
+      // ── /households/{householdId}/receipts/{receiptId} ────────────────
+
+      match /receipts/{receiptId} {
+        allow read: if isMember(householdId);
+
+        allow create: if isMember(householdId)
+          && isValidString(incomingData().imageUrl)
+          && isValidReceiptStatus(incomingData().status)
+          && incomingData().parsedItems is list;
+
+        allow update: if isMember(householdId)
+          && isValidReceiptStatus(incomingData().status);
+
+        allow delete: if isAdmin(householdId);
+      }
+    }
+
+    // ── Deny everything else ──────────────────────────────────────────────
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
