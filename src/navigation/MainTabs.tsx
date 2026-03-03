@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
+import InventoryStack from "./InventoryStack";
 import type { MainTabsParamList } from "./types";
 
 // ─── Placeholder Screen ─────────────────────────────────────────────────────
@@ -26,9 +27,6 @@ function PlaceholderScreen({ title }: { title: string }) {
 
 function DiaryScreen() {
   return <PlaceholderScreen title="Diary" />;
-}
-function InventoryScreen() {
-  return <PlaceholderScreen title="Inventory" />;
 }
 function ScanScreen() {
   return <PlaceholderScreen title="Scan" />;
@@ -92,7 +90,11 @@ export default function MainTabs() {
       })}
     >
       <Tab.Screen name="Diary" component={DiaryScreen} />
-      <Tab.Screen name="Inventory" component={InventoryScreen} />
+      <Tab.Screen
+        name="Inventory"
+        component={InventoryStack}
+        options={{ headerShown: false }}
+      />
       <Tab.Screen name="Scan" component={ScanScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

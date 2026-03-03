@@ -2,6 +2,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
@@ -33,6 +34,16 @@ export async function createUserProfile(
   };
 
   await setDoc(doc(db, COLLECTIONS.users, uid), profile);
+}
+
+export async function updateUserHouseholdIds(
+  uid: string,
+  householdIds: string[]
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.users, uid), {
+    householdIds,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function getUserProfile(

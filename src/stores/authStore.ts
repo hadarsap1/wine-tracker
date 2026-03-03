@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { User } from "firebase/auth";
 import * as authService from "@services/auth";
 import * as userService from "@services/user";
+import * as householdService from "@services/household";
 import type { UserProfile } from "@/types/index";
 
 interface AuthState {
@@ -48,6 +49,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       const user = await authService.signUp(email, password, displayName);
       await userService.createUserProfile(user.uid, email, displayName);
+      const householdId = await householdService.createPersonalHousehold(
+        user.uid,
+        displayName
+      );
+      await userService.updateUserHouseholdIds(user.uid, [householdId]);
       const profile = await userService.getUserProfile(user.uid);
       set({ user, profile, loading: false });
     } catch (e) {
