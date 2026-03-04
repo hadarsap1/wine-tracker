@@ -69,6 +69,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       await get().loadItems(householdId);
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
+      throw e;
     }
   },
 
@@ -83,6 +84,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       }));
     } catch (e) {
       set({ error: (e as Error).message });
+      throw e;
     }
   },
 
@@ -104,6 +106,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       }
     } catch (e) {
       set({ error: (e as Error).message });
+      throw e;
     }
   },
 
@@ -116,6 +119,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       }));
     } catch (e) {
       set({ error: (e as Error).message });
+      throw e;
     }
   },
 

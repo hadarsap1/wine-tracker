@@ -59,32 +59,32 @@ export async function createWineWithInventory(
   const batch = writeBatch(db);
 
   const wineRef = doc(winesCol(householdId));
-  const wine: CreateWine = {
+  const wine: Record<string, unknown> = {
     name: wineData.name,
     nameNormalized: wineData.name.toLowerCase().trim(),
     type: wineData.type,
-    producer: wineData.producer || undefined,
-    region: wineData.region || undefined,
-    country: wineData.country || undefined,
-    vintage: wineData.vintage || undefined,
-    grape: wineData.grape || undefined,
-    notes: wineData.notes || undefined,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+  if (wineData.producer) wine.producer = wineData.producer;
+  if (wineData.region) wine.region = wineData.region;
+  if (wineData.country) wine.country = wineData.country;
+  if (wineData.vintage) wine.vintage = wineData.vintage;
+  if (wineData.grape) wine.grape = wineData.grape;
+  if (wineData.notes) wine.notes = wineData.notes;
   batch.set(wineRef, wine);
 
   const itemRef = doc(inventoryCol(householdId));
-  const item: CreateInventoryItem = {
+  const item: Record<string, unknown> = {
     wineId: wineRef.id,
     wineName: wineData.name,
     wineType: wineData.type,
     quantity: inventoryData.quantity,
-    location: inventoryData.location || undefined,
-    purchasePrice: inventoryData.purchasePrice || undefined,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+  if (inventoryData.location) item.location = inventoryData.location;
+  if (inventoryData.purchasePrice) item.purchasePrice = inventoryData.purchasePrice;
   batch.set(itemRef, item);
 
   await batch.commit();
@@ -172,4 +172,31 @@ export async function deleteInventoryItem(
     itemId
   );
   await deleteDoc(ref);
+}
+
+export async function getWines(householdId: string): Promise<Wine[]> {
+  const q = query(winesCol(householdId), orderBy("name", "asc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Wine);
+}
+
+export async function createWineOnly(
+  householdId: string,
+  wineData: WineFormData
+): Promise<string> {
+  const wine: Record<string, unknown> = {
+    name: wineData.name,
+    nameNormalized: wineData.name.toLowerCase().trim(),
+    type: wineData.type,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (wineData.producer) wine.producer = wineData.producer;
+  if (wineData.region) wine.region = wineData.region;
+  if (wineData.country) wine.country = wineData.country;
+  if (wineData.vintage) wine.vintage = wineData.vintage;
+  if (wineData.grape) wine.grape = wineData.grape;
+  if (wineData.notes) wine.notes = wineData.notes;
+  const docRef = await addDoc(winesCol(householdId), wine);
+  return docRef.id;
 }

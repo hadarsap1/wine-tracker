@@ -6,6 +6,7 @@ import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityI
 import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
 import InventoryStack from "./InventoryStack";
+import DiaryStack from "./DiaryStack";
 import type { MainTabsParamList } from "./types";
 
 // ─── Placeholder Screen ─────────────────────────────────────────────────────
@@ -25,9 +26,6 @@ function PlaceholderScreen({ title }: { title: string }) {
 
 // ─── Tab Screens ────────────────────────────────────────────────────────────
 
-function DiaryScreen() {
-  return <PlaceholderScreen title="Diary" />;
-}
 function ScanScreen() {
   return <PlaceholderScreen title="Scan" />;
 }
@@ -89,7 +87,11 @@ export default function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Diary" component={DiaryScreen} />
+      <Tab.Screen
+        name="Diary"
+        component={DiaryStack}
+        options={{ headerShown: false }}
+      />
       <Tab.Screen
         name="Inventory"
         component={InventoryStack}

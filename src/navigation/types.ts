@@ -2,6 +2,16 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { NavigatorScreenParams } from "@react-navigation/native";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { WineType } from "@/types/index";
+
+// ─── Selected Wine (for Diary flow) ─────────────────────────────────────────
+
+export type SelectedWine = {
+  wineId: string;
+  wineName: string;
+  wineType: WineType;
+  inventoryItemId?: string;
+};
 
 // ─── Param Lists ────────────────────────────────────────────────────────────
 
@@ -17,8 +27,16 @@ export type InventoryStackParamList = {
   EditWine: { wineId: string; itemId: string };
 };
 
+export type DiaryStackParamList = {
+  DiaryList: undefined;
+  AddEntry: { selectedWine?: SelectedWine } | undefined;
+  EntryDetail: { entryId: string };
+  EditEntry: { entryId: string };
+  SelectWine: undefined;
+};
+
 export type MainTabsParamList = {
-  Diary: undefined;
+  Diary: NavigatorScreenParams<DiaryStackParamList>;
   Inventory: NavigatorScreenParams<InventoryStackParamList>;
   Scan: undefined;
   Search: undefined;
@@ -42,3 +60,12 @@ export type InventoryListScreenProps = CompositeScreenProps<
 export type AddWineScreenProps = NativeStackScreenProps<InventoryStackParamList, "AddWine">;
 export type WineDetailScreenProps = NativeStackScreenProps<InventoryStackParamList, "WineDetail">;
 export type EditWineScreenProps = NativeStackScreenProps<InventoryStackParamList, "EditWine">;
+
+export type DiaryListScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<DiaryStackParamList, "DiaryList">,
+  BottomTabScreenProps<MainTabsParamList>
+>;
+export type AddEntryScreenProps = NativeStackScreenProps<DiaryStackParamList, "AddEntry">;
+export type EntryDetailScreenProps = NativeStackScreenProps<DiaryStackParamList, "EntryDetail">;
+export type EditEntryScreenProps = NativeStackScreenProps<DiaryStackParamList, "EditEntry">;
+export type SelectWineScreenProps = NativeStackScreenProps<DiaryStackParamList, "SelectWine">;
