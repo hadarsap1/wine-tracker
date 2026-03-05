@@ -4,6 +4,7 @@ export { default as MainTabs } from "./MainTabs";
 export { default as InventoryStack } from "./InventoryStack";
 export { default as DiaryStack } from "./DiaryStack";
 export { default as ProfileStack } from "./ProfileStack";
+export { default as SearchStack } from "./SearchStack";
 export type {
   AuthStackParamList,
   MainTabsParamList,
@@ -25,4 +26,7 @@ export type {
   ProfileStackParamList,
   ProfileMainScreenProps,
   EditProfileScreenProps,
+  SearchStackParamList,
+  SearchMainScreenProps,
+  SearchWineDetailScreenProps,
 } from "./types";

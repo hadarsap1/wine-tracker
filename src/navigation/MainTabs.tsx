@@ -7,6 +7,7 @@ import { colors } from "@config/theme";
 import InventoryStack from "./InventoryStack";
 import DiaryStack from "./DiaryStack";
 import ProfileStack from "./ProfileStack";
+import SearchStack from "./SearchStack";
 import type { MainTabsParamList } from "./types";
 
 // ─── Placeholder Screen ─────────────────────────────────────────────────────
@@ -28,9 +29,6 @@ function PlaceholderScreen({ title }: { title: string }) {
 
 function ScanScreen() {
   return <PlaceholderScreen title="Scan" />;
-}
-function SearchScreen() {
-  return <PlaceholderScreen title="Search" />;
 }
 // ─── Tab Navigator ──────────────────────────────────────────────────────────
 
@@ -75,7 +73,7 @@ export default function MainTabs() {
         options={{ headerShown: false }}
       />
       <Tab.Screen name="Scan" component={ScanScreen} />
-      <Tab.Screen name="Search" component={SearchScreen} />
+      <Tab.Screen name="Search" component={SearchStack} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileStack} options={{ headerShown: false }} />
     </Tab.Navigator>
   );

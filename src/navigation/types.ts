@@ -40,11 +40,16 @@ export type ProfileStackParamList = {
   EditProfile: undefined;
 };
 
+export type SearchStackParamList = {
+  SearchMain: undefined;
+  SearchWineDetail: { itemId: string; wineId: string };
+};
+
 export type MainTabsParamList = {
   Diary: NavigatorScreenParams<DiaryStackParamList>;
   Inventory: NavigatorScreenParams<InventoryStackParamList>;
   Scan: undefined;
-  Search: undefined;
+  Search: NavigatorScreenParams<SearchStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
@@ -80,3 +85,9 @@ export type ProfileMainScreenProps = CompositeScreenProps<
   BottomTabScreenProps<MainTabsParamList>
 >;
 export type EditProfileScreenProps = NativeStackScreenProps<ProfileStackParamList, "EditProfile">;
+
+export type SearchMainScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<SearchStackParamList, "SearchMain">,
+  BottomTabScreenProps<MainTabsParamList>
+>;
+export type SearchWineDetailScreenProps = NativeStackScreenProps<SearchStackParamList, "SearchWineDetail">;
