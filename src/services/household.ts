@@ -1,6 +1,7 @@
 import {
   doc,
   collection,
+  getDoc,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -8,6 +9,7 @@ import { db } from "@config/firebase";
 import {
   COLLECTIONS,
   HouseholdRole,
+  type Household,
   type CreateHousehold,
   type CreateHouseholdMember,
 } from "@/types/index";
@@ -50,4 +52,12 @@ export async function createPersonalHousehold(
   await setDoc(memberRef, member);
 
   return householdId;
+}
+
+export async function getHousehold(
+  householdId: string
+): Promise<Household | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.households, householdId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Household;
 }

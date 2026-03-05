@@ -1,12 +1,12 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { Button, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
-import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
 import InventoryStack from "./InventoryStack";
 import DiaryStack from "./DiaryStack";
+import ProfileStack from "./ProfileStack";
 import type { MainTabsParamList } from "./types";
 
 // ─── Placeholder Screen ─────────────────────────────────────────────────────
@@ -32,29 +32,6 @@ function ScanScreen() {
 function SearchScreen() {
   return <PlaceholderScreen title="Search" />;
 }
-function ProfileScreen() {
-  const { signOut, loading } = useAuthStore();
-  return (
-    <View style={styles.placeholder}>
-      <Text variant="headlineSmall" style={styles.placeholderText}>
-        Profile
-      </Text>
-      <Text variant="bodyMedium" style={styles.comingSoon}>
-        Coming soon
-      </Text>
-      <Button
-        mode="outlined"
-        onPress={signOut}
-        loading={loading}
-        style={styles.signOutButton}
-        textColor={colors.primary}
-      >
-        Sign Out
-      </Button>
-    </View>
-  );
-}
-
 // ─── Tab Navigator ──────────────────────────────────────────────────────────
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
@@ -99,7 +76,7 @@ export default function MainTabs() {
       />
       <Tab.Screen name="Scan" component={ScanScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStack} options={{ headerShown: false }} />
     </Tab.Navigator>
   );
 }
@@ -119,9 +96,5 @@ const styles = StyleSheet.create({
   comingSoon: {
     color: colors.textSecondary,
     marginTop: 8,
-  },
-  signOutButton: {
-    marginTop: 24,
-    borderColor: colors.primary,
   },
 });

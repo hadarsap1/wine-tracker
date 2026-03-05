@@ -53,3 +53,24 @@ export async function getUserProfile(
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as UserProfile;
 }
+
+export async function updateUserProfile(
+  uid: string,
+  data: Partial<Pick<UserProfile, "displayName">>
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.users, uid), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateUserPreferences(
+  uid: string,
+  preferences: Partial<UserPreferences>
+): Promise<void> {
+  const updates: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  for (const [key, value] of Object.entries(preferences)) {
+    updates[`preferences.${key}`] = value;
+  }
+  await updateDoc(doc(db, COLLECTIONS.users, uid), updates);
+}

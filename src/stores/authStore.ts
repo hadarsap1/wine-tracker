@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import * as authService from "@services/auth";
 import * as userService from "@services/user";
 import * as householdService from "@services/household";
-import type { UserProfile } from "@/types/index";
+import type { UserProfile, UserPreferences } from "@/types/index";
 
 interface AuthState {
   user: User | null;
@@ -17,6 +17,8 @@ interface AuthActions {
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (data: { displayName: string }) => Promise<void>;
+  updatePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
   clearError: () => void;
 }
 
@@ -83,6 +85,25 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ loading: false, error: (e as Error).message });
       throw e;
     }
+  },
+
+  updateProfile: async (data) => {
+    const { user, profile } = get();
+    if (!user || !profile) throw new Error("Not authenticated");
+    await userService.updateUserProfile(user.uid, data);
+    set({ profile: { ...profile, ...data } });
+  },
+
+  updatePreferences: async (prefs) => {
+    const { user, profile } = get();
+    if (!user || !profile) throw new Error("Not authenticated");
+    await userService.updateUserPreferences(user.uid, prefs);
+    set({
+      profile: {
+        ...profile,
+        preferences: { ...profile.preferences, ...prefs },
+      },
+    });
   },
 
   clearError: () => set({ error: null }),

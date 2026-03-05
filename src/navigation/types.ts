@@ -35,12 +35,17 @@ export type DiaryStackParamList = {
   SelectWine: undefined;
 };
 
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  EditProfile: undefined;
+};
+
 export type MainTabsParamList = {
   Diary: NavigatorScreenParams<DiaryStackParamList>;
   Inventory: NavigatorScreenParams<InventoryStackParamList>;
   Scan: undefined;
   Search: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
 export type RootStackParamList = {
@@ -69,3 +74,9 @@ export type AddEntryScreenProps = NativeStackScreenProps<DiaryStackParamList, "A
 export type EntryDetailScreenProps = NativeStackScreenProps<DiaryStackParamList, "EntryDetail">;
 export type EditEntryScreenProps = NativeStackScreenProps<DiaryStackParamList, "EditEntry">;
 export type SelectWineScreenProps = NativeStackScreenProps<DiaryStackParamList, "SelectWine">;
+
+export type ProfileMainScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, "ProfileMain">,
+  BottomTabScreenProps<MainTabsParamList>
+>;
+export type EditProfileScreenProps = NativeStackScreenProps<ProfileStackParamList, "EditProfile">;
