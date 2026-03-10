@@ -1,6 +1,4 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
-import { Text } from "react-native-paper";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { colors } from "@config/theme";
@@ -8,28 +6,9 @@ import InventoryStack from "./InventoryStack";
 import DiaryStack from "./DiaryStack";
 import ProfileStack from "./ProfileStack";
 import SearchStack from "./SearchStack";
+import ScanStack from "./ScanStack";
 import type { MainTabsParamList } from "./types";
 
-// ─── Placeholder Screen ─────────────────────────────────────────────────────
-
-function PlaceholderScreen({ title }: { title: string }) {
-  return (
-    <View style={styles.placeholder}>
-      <Text variant="headlineSmall" style={styles.placeholderText}>
-        {title}
-      </Text>
-      <Text variant="bodyMedium" style={styles.comingSoon}>
-        Coming soon
-      </Text>
-    </View>
-  );
-}
-
-// ─── Tab Screens ────────────────────────────────────────────────────────────
-
-function ScanScreen() {
-  return <PlaceholderScreen title="Scan" />;
-}
 // ─── Tab Navigator ──────────────────────────────────────────────────────────
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
@@ -72,27 +51,9 @@ export default function MainTabs() {
         component={InventoryStack}
         options={{ headerShown: false }}
       />
-      <Tab.Screen name="Scan" component={ScanScreen} />
+      <Tab.Screen name="Scan" component={ScanStack} options={{ headerShown: false }} />
       <Tab.Screen name="Search" component={SearchStack} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileStack} options={{ headerShown: false }} />
     </Tab.Navigator>
   );
 }
-
-// ─── Styles ─────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  placeholder: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderText: {
-    color: colors.text,
-  },
-  comingSoon: {
-    color: colors.textSecondary,
-    marginTop: 8,
-  },
-});

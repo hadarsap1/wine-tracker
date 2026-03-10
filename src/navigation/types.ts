@@ -3,6 +3,7 @@ import type { NavigatorScreenParams } from "@react-navigation/native";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { WineType } from "@/types/index";
+import type { ParsedLabelData } from "@/utils/parseLabelText";
 
 // ─── Selected Wine (for Diary flow) ─────────────────────────────────────────
 
@@ -45,10 +46,15 @@ export type SearchStackParamList = {
   SearchWineDetail: { itemId: string; wineId: string };
 };
 
+export type ScanStackParamList = {
+  ScanMain: undefined;
+  ScanReview: { parsedData: ParsedLabelData; imageUri: string; rawText: string };
+};
+
 export type MainTabsParamList = {
   Diary: NavigatorScreenParams<DiaryStackParamList>;
   Inventory: NavigatorScreenParams<InventoryStackParamList>;
-  Scan: undefined;
+  Scan: NavigatorScreenParams<ScanStackParamList>;
   Search: NavigatorScreenParams<SearchStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
@@ -91,3 +97,6 @@ export type SearchMainScreenProps = CompositeScreenProps<
   BottomTabScreenProps<MainTabsParamList>
 >;
 export type SearchWineDetailScreenProps = NativeStackScreenProps<SearchStackParamList, "SearchWineDetail">;
+
+export type ScanMainScreenProps = NativeStackScreenProps<ScanStackParamList, "ScanMain">;
+export type ScanReviewScreenProps = NativeStackScreenProps<ScanStackParamList, "ScanReview">;
