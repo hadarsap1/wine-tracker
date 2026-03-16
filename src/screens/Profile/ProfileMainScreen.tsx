@@ -13,7 +13,7 @@ const WINE_TYPE_OPTIONS = Object.values(WineType);
 export default function ProfileMainScreen({
   navigation,
 }: ProfileMainScreenProps) {
-  const { profile, signOut, updatePreferences, loading } = useAuthStore();
+  const { profile, signOut, updatePreferences, loading: authLoading } = useAuthStore();
   const [householdName, setHouseholdName] = useState<string>("");
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [signOutDialogVisible, setSignOutDialogVisible] = useState(false);
@@ -56,10 +56,23 @@ export default function ProfileMainScreen({
     await updatePreferences({ defaultWineType: type });
   };
 
-  if (!profile) {
+  if (!profile && authLoading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Text variant="bodyLarge" style={{ color: colors.text, marginBottom: 16 }}>
+          Unable to load profile
+        </Text>
+        <Button mode="contained" onPress={() => signOut()} buttonColor={colors.primary}>
+          Sign Out & Try Again
+        </Button>
       </View>
     );
   }
@@ -146,7 +159,7 @@ export default function ProfileMainScreen({
             </Button>
             <Button
               onPress={handleSignOut}
-              loading={loading}
+              loading={authLoading}
               textColor={colors.primary}
             >
               Sign Out

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { TextInput, Button, SegmentedButtons, Text } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
@@ -44,29 +45,36 @@ export default function AddWineScreen({ navigation }: AddWineScreenProps) {
     if (isNaN(qty) || qty < 1) {
       return;
     }
-    if (!householdId) return;
+    if (!householdId) {
+      Alert.alert("Error", "No household found. Please sign out and sign in again.");
+      return;
+    }
 
-    await addWine(
-      householdId,
-      {
-        name: name.trim(),
-        type,
-        producer: producer.trim() || undefined,
-        region: region.trim() || undefined,
-        country: country.trim() || undefined,
-        vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
-        grape: grape.trim() || undefined,
-        notes: notes.trim() || undefined,
-      },
-      {
-        quantity: qty,
-        location: location.trim() || undefined,
-        purchasePrice: purchasePrice
-          ? parseFloat(purchasePrice) || undefined
-          : undefined,
-      }
-    );
-    navigation.goBack();
+    try {
+      await addWine(
+        householdId,
+        {
+          name: name.trim(),
+          type,
+          producer: producer.trim() || undefined,
+          region: region.trim() || undefined,
+          country: country.trim() || undefined,
+          vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
+          grape: grape.trim() || undefined,
+          notes: notes.trim() || undefined,
+        },
+        {
+          quantity: qty,
+          location: location.trim() || undefined,
+          purchasePrice: purchasePrice
+            ? parseFloat(purchasePrice) || undefined
+            : undefined,
+        }
+      );
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message || "Failed to add wine. Please try again.");
+    }
   };
 
   return (
