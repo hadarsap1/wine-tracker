@@ -130,11 +130,13 @@ export default function ManageHouseholdScreen({
 
   const inviteLink = inviteCode ? `${env.appUrl}/join/${inviteCode}` : null;
 
+  const inviteMessage = inviteLink ? t.inviteMessageTemplate(inviteLink) : null;
+
   const handleCopy = async () => {
-    if (!inviteLink) return;
+    if (!inviteMessage) return;
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(inviteLink);
+        await navigator.clipboard.writeText(inviteMessage);
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
         showSnackbar(t.linkCopied, "success");
@@ -147,8 +149,8 @@ export default function ManageHouseholdScreen({
   };
 
   const handleShare = async () => {
-    if (!inviteLink) return;
-    await Share.share({ message: inviteLink });
+    if (!inviteMessage) return;
+    await Share.share({ message: inviteMessage });
   };
 
   return (

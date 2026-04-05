@@ -193,6 +193,8 @@ export const t = {
   shareLink: "שתף קישור",
   linkCopied: "הקישור הועתק!",
   inviteExpiry: "תקף ל-48 שעות",
+  inviteMessageTemplate: (link: string) =>
+    `הוזמנת להצטרף למרתף היין שלי ביומן יין 🍷\n\nלחץ/י על הקישור כדי להצטרף (תקף ל-48 שעות):\n${link}`,
   joinHousehold: "הצטרף למשק בית",
   joinHouseholdSubtitle: "הזן קוד הזמנה שקיבלת",
   inviteCode: "קוד הזמנה",
