@@ -3,19 +3,23 @@ import {
   View,
   StyleSheet,
   Image,
-  Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Button, Text } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "@config/theme";
+import { env } from "@config/env";
+import { t } from "@i18n/index";
 import { detectText } from "@services/vision";
 import { parseLabelText } from "@/utils/parseLabelText";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import type { ScanMainScreenProps } from "@navigation/types";
 
 export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
   const [processing, setProcessing] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const showSnackbar = useSnackbarStore((s) => s.show);
 
   const processImage = async (uri: string) => {
     setImageUri(uri);
@@ -23,15 +27,11 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
     try {
       const { fullText, error } = await detectText(uri);
       if (error) {
-        Alert.alert("Scan Error", error);
-        setProcessing(false);
-        setImageUri(null);
+        showSnackbar(error, "error");
         return;
       }
       if (!fullText.trim()) {
-        Alert.alert("No Text Found", "Could not detect any text on the label. Try a clearer photo.");
-        setProcessing(false);
-        setImageUri(null);
+        showSnackbar(t.noTextFoundMsg, "error");
         return;
       }
       const parsedData = parseLabelText(fullText);
@@ -40,8 +40,8 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
         imageUri: uri,
         rawText: fullText,
       });
-    } catch (e: any) {
-      Alert.alert("Error", e.message ?? "Something went wrong");
+    } catch (e: unknown) {
+      showSnackbar((e as Error).message ?? t.scanError, "error");
     } finally {
       setProcessing(false);
       setImageUri(null);
@@ -49,9 +49,13 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
   };
 
   const takePhoto = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert(t.scanUnavailable, t.cameraNotAvailableWeb ?? "Camera capture is not supported in the browser. Please upload an image instead.");
+      return;
+    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission Denied", "Camera access is required to scan wine labels.");
+      Alert.alert(t.permissionDenied, t.cameraPermissionMsg);
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -64,10 +68,12 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
   };
 
   const pickFromGallery = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission Denied", "Gallery access is required to select a photo.");
-      return;
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(t.permissionDenied, t.galleryPermissionMsg);
+        return;
+      }
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       quality: 0.8,
@@ -79,6 +85,19 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
     }
   };
 
+  if (!env.googleCloudVisionApiKey) {
+    return (
+      <View style={styles.container}>
+        <Text variant="headlineSmall" style={styles.title}>
+          {t.scanUnavailable}
+        </Text>
+        <Text variant="bodyMedium" style={styles.subtitle}>
+          {t.scanUnavailableMsg}
+        </Text>
+      </View>
+    );
+  }
+
   if (processing && imageUri) {
     return (
       <View style={styles.processingContainer}>
@@ -86,7 +105,7 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text variant="titleMedium" style={styles.processingText}>
-            Reading label...
+            {t.readingLabel}
           </Text>
         </View>
       </View>
@@ -96,23 +115,25 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
   return (
     <View style={styles.container}>
       <Text variant="headlineSmall" style={styles.title}>
-        Scan Wine Label
+        {t.scanLabel}
       </Text>
       <Text variant="bodyMedium" style={styles.subtitle}>
-        Take a photo of a wine label to automatically fill in the details
+        {t.scanSubtitle}
       </Text>
 
       <View style={styles.buttonsContainer}>
-        <Button
-          mode="contained"
-          onPress={takePhoto}
-          icon="camera"
-          style={styles.button}
-          buttonColor={colors.primary}
-          contentStyle={styles.buttonContent}
-        >
-          Take Photo
-        </Button>
+        {Platform.OS !== "web" && (
+          <Button
+            mode="contained"
+            onPress={takePhoto}
+            icon="camera"
+            style={styles.button}
+            buttonColor={colors.primary}
+            contentStyle={styles.buttonContent}
+          >
+            {t.takePhoto}
+          </Button>
+        )}
         <Button
           mode="outlined"
           onPress={pickFromGallery}
@@ -121,7 +142,7 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
           textColor={colors.primary}
           contentStyle={styles.buttonContent}
         >
-          Choose from Gallery
+          {t.chooseFromGallery}
         </Button>
       </View>
     </View>

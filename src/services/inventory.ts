@@ -10,15 +10,19 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
+  increment,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
 import {
   COLLECTIONS,
   type Wine,
+  type VivinoData,
   type InventoryItem,
+  type InventoryStatus,
   type CreateWine,
   type CreateInventoryItem,
   type WineType,
+  type Rating,
 } from "@/types/index";
 
 function winesCol(householdId: string) {
@@ -43,10 +47,12 @@ export interface WineFormData {
   vintage?: number;
   grape?: string;
   notes?: string;
+  vivinoData?: VivinoData;
 }
 
 export interface InventoryFormData {
   quantity: number;
+  status?: InventoryStatus;
   location?: string;
   purchasePrice?: number;
 }
@@ -72,6 +78,7 @@ export async function createWineWithInventory(
   if (wineData.vintage) wine.vintage = wineData.vintage;
   if (wineData.grape) wine.grape = wineData.grape;
   if (wineData.notes) wine.notes = wineData.notes;
+  if (wineData.vivinoData) wine.vivinoData = wineData.vivinoData;
   batch.set(wineRef, wine);
 
   const itemRef = doc(inventoryCol(householdId));
@@ -80,6 +87,7 @@ export async function createWineWithInventory(
     wineName: wineData.name,
     wineType: wineData.type,
     quantity: inventoryData.quantity,
+    status: inventoryData.status ?? "in_stock",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -114,7 +122,7 @@ export async function getWine(
 export async function updateInventoryItem(
   householdId: string,
   itemId: string,
-  data: Partial<Pick<InventoryItem, "quantity" | "location" | "purchasePrice">>
+  data: Partial<Pick<InventoryItem, "quantity" | "location" | "purchasePrice" | "status">>
 ): Promise<void> {
   const ref = doc(
     db,
@@ -140,6 +148,7 @@ export async function updateWine(
       | "vintage"
       | "grape"
       | "notes"
+      | "vivinoData"
     >
   >
 ): Promise<void> {
@@ -180,6 +189,57 @@ export async function getWines(householdId: string): Promise<Wine[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Wine);
 }
 
+/**
+ * Atomically decrements (or removes) inventory item AND creates a diary entry.
+ * Uses a batch so both writes succeed or fail together.
+ * Returns whether the inventory item was deleted (quantity was 1).
+ */
+export async function openBottle(
+  householdId: string,
+  itemId: string,
+  currentQuantity: number,
+  diary: { entryId: string; wineId: string; wineName: string; wineType: WineType }
+): Promise<boolean> {
+  const batch = writeBatch(db);
+
+  const itemRef = doc(
+    db,
+    COLLECTIONS.households,
+    householdId,
+    COLLECTIONS.inventoryItems,
+    itemId
+  );
+
+  const deleted = currentQuantity <= 1;
+  if (deleted) {
+    batch.delete(itemRef);
+  } else {
+    batch.update(itemRef, { quantity: increment(-1), updatedAt: serverTimestamp() });
+  }
+
+  const diaryRef = doc(
+    db,
+    COLLECTIONS.households,
+    householdId,
+    COLLECTIONS.diaryEntries,
+    diary.entryId
+  );
+  batch.set(diaryRef, {
+    wineId: diary.wineId,
+    wineName: diary.wineName,
+    wineType: diary.wineType,
+    rating: null as Rating | null,
+    imageUrls: [],
+    inventoryItemId: itemId,
+    tastingDate: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
+  return deleted;
+}
+
 export async function createWineOnly(
   householdId: string,
   wineData: WineFormData
@@ -197,6 +257,7 @@ export async function createWineOnly(
   if (wineData.vintage) wine.vintage = wineData.vintage;
   if (wineData.grape) wine.grape = wineData.grape;
   if (wineData.notes) wine.notes = wineData.notes;
+  if (wineData.vivinoData) wine.vivinoData = wineData.vivinoData;
   const docRef = await addDoc(winesCol(householdId), wine);
   return docRef.id;
 }

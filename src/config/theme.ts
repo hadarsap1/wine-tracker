@@ -7,15 +7,16 @@ import {
 // ─── Color Palette ──────────────────────────────────────────────────────────
 
 export const colors = {
-  primary: "#e94560",
-  primaryLight: "#ff6b81",
-  surface: "#1a1a2e",
-  surfaceVariant: "#22223a",
-  background: "#1a1a2e",
-  card: "#22223a",
+  primary: "#8b1a2e",
+  primaryLight: "#a52236",
+  gold: "#c9a84c",
+  surface: "#0d0d1a",
+  surfaceVariant: "#141428",
+  background: "#0d0d1a",
+  card: "#141428",
   text: "#ffffff",
-  textSecondary: "#a0a0b8",
-  border: "#2a2a4a",
+  textSecondary: "#a0a0c0",
+  border: "#1e1e3a",
   error: "#cf6679",
   onPrimary: "#ffffff",
 } as const;

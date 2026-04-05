@@ -1,7 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Text, Button } from "react-native-paper";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
 
 interface EmptyStateProps {
@@ -18,23 +18,25 @@ export default function EmptyState({
   subtitle,
   actionLabel,
   onAction,
-}: EmptyStateProps) {
+}: EmptyStateProps): React.ReactElement {
   return (
     <View style={styles.container}>
-      <MaterialCommunityIcons
-        name={icon}
-        size={64}
-        color={colors.textSecondary}
-      />
+      <View style={styles.iconWrapper}>
+        <MaterialCommunityIcons
+          name={icon as any}
+          size={64}
+          color={colors.gold}
+        />
+      </View>
       <Text variant="titleLarge" style={styles.title}>
         {title}
       </Text>
-      {subtitle && (
+      {subtitle ? (
         <Text variant="bodyMedium" style={styles.subtitle}>
           {subtitle}
         </Text>
-      )}
-      {actionLabel && onAction && (
+      ) : null}
+      {actionLabel && onAction ? (
         <Button
           mode="contained"
           onPress={onAction}
@@ -43,7 +45,7 @@ export default function EmptyState({
         >
           {actionLabel}
         </Button>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -54,6 +56,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 32,
+  },
+  iconWrapper: {
+    backgroundColor: colors.card,
+    borderRadius: 40,
+    padding: 16,
+    marginBottom: 12,
   },
   title: {
     color: colors.text,

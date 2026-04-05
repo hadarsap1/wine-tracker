@@ -19,6 +19,7 @@ import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { SelectWineScreenProps, SelectedWine } from "@navigation/types";
 import { WineType } from "@/types/index";
@@ -64,7 +65,7 @@ export default function SelectWineScreen({
       const result = await inventoryService.getWines(householdId);
       setWines(result);
     } catch {
-      Alert.alert("Error", "Failed to load wines");
+      Alert.alert(t.error, t.failedToLoadWines);
     } finally {
       setLoadingWines(false);
     }
@@ -108,7 +109,7 @@ export default function SelectWineScreen({
       };
       navigation.navigate("AddEntry", { selectedWine });
     } catch {
-      Alert.alert("Error", "Failed to create wine");
+      Alert.alert(t.error, t.failedToCreateWine);
     } finally {
       setAdding(false);
     }
@@ -126,14 +127,15 @@ export default function SelectWineScreen({
   const ListHeader = () => (
     <View style={styles.quickAddSection}>
       <Text variant="titleSmall" style={styles.sectionTitle}>
-        Quick Add New Wine
+        {t.quickAddWine}
       </Text>
       <TextInput
-        label="Wine Name"
+        label={t.wineNamePlain}
         value={quickName}
         onChangeText={setQuickName}
         mode="outlined"
         style={styles.input}
+        contentStyle={styles.inputContent}
         textColor={colors.text}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
@@ -141,18 +143,18 @@ export default function SelectWineScreen({
       <SegmentedButtons
         value={quickType}
         onValueChange={(val) => setQuickType(val as WineType)}
-        buttons={WINE_TYPES.slice(0, 4).map((t) => ({
-          value: t,
-          label: t,
+        buttons={WINE_TYPES.slice(0, 4).map((type) => ({
+          value: type,
+          label: t.wineTypeLabels[type] ?? type,
         }))}
         style={styles.segmented}
       />
       <SegmentedButtons
         value={quickType}
         onValueChange={(val) => setQuickType(val as WineType)}
-        buttons={WINE_TYPES.slice(4).map((t) => ({
-          value: t,
-          label: t,
+        buttons={WINE_TYPES.slice(4).map((type) => ({
+          value: type,
+          label: t.wineTypeLabels[type] ?? type,
         }))}
         style={styles.segmented}
       />
@@ -165,11 +167,11 @@ export default function SelectWineScreen({
         buttonColor={colors.primary}
         textColor={colors.onPrimary}
       >
-        Add & Select
+        {t.addAndSelect}
       </Button>
       <Divider style={styles.divider} />
       <Text variant="titleSmall" style={styles.sectionTitle}>
-        Or Select Existing Wine
+        {t.orSelectExisting}
       </Text>
     </View>
   );
@@ -177,7 +179,7 @@ export default function SelectWineScreen({
   return (
     <View style={styles.container}>
       <Searchbar
-        placeholder="Search wines..."
+        placeholder={t.searchWines}
         value={search}
         onChangeText={setSearch}
         style={styles.searchbar}
@@ -226,10 +228,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.textSecondary,
     marginBottom: 12,
+    textAlign: "right",
   },
   input: {
     backgroundColor: colors.card,
     marginBottom: 12,
+  },
+  inputContent: {
+    textAlign: "right",
   },
   segmented: {
     marginBottom: 8,
@@ -254,6 +260,6 @@ const styles = StyleSheet.create({
   wineName: {
     color: colors.text,
     flex: 1,
-    marginRight: 12,
+    marginLeft: 12,
   },
 });

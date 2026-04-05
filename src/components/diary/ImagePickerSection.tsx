@@ -5,12 +5,14 @@ import {
   Image,
   Pressable,
   Alert,
+  Platform,
   StyleSheet,
 } from "react-native";
 import { Text } from "react-native-paper";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 
 interface ImagePickerSectionProps {
   images: string[];
@@ -38,7 +40,7 @@ export default function ImagePickerSection({
   const pickFromCamera = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Permission needed", "Camera access is required to take photos.");
+      Alert.alert(t.permissionDenied, t.cameraPermissionPhoto);
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -50,17 +52,21 @@ export default function ImagePickerSection({
   };
 
   const handleAdd = () => {
-    Alert.alert("Add Photo", "Choose a source", [
-      { text: "Camera", onPress: pickFromCamera },
-      { text: "Gallery", onPress: pickFromGallery },
-      { text: "Cancel", style: "cancel" },
+    if (Platform.OS === "web") {
+      pickFromGallery();
+      return;
+    }
+    Alert.alert(t.addPhoto, t.chooseSource, [
+      { text: t.camera, onPress: pickFromCamera },
+      { text: t.gallery, onPress: pickFromGallery },
+      { text: t.cancel, style: "cancel" },
     ]);
   };
 
   return (
     <View>
       <Text variant="labelLarge" style={styles.label}>
-        Photos ({images.length}/{max})
+        {t.photos} ({images.length}/{max})
       </Text>
       <ScrollView
         horizontal
@@ -101,6 +107,7 @@ const styles = StyleSheet.create({
   label: {
     color: colors.text,
     marginBottom: 8,
+    textAlign: "right",
   },
   scroll: {
     gap: 10,

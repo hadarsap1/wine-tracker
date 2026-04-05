@@ -3,6 +3,7 @@ import { View, StyleSheet } from "react-native";
 import { TextInput, Button, Text } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import type { EditProfileScreenProps } from "@navigation/types";
 
 export default function EditProfileScreen({
@@ -16,7 +17,7 @@ export default function EditProfileScreen({
   const handleSave = async () => {
     const trimmed = displayName.trim();
     if (!trimmed) {
-      setError("Display name cannot be empty");
+      setError(t.displayNameEmpty);
       return;
     }
     if (trimmed === profile?.displayName) {
@@ -38,7 +39,7 @@ export default function EditProfileScreen({
   return (
     <View style={styles.container}>
       <TextInput
-        label="Display Name"
+        label={t.displayName}
         value={displayName}
         onChangeText={(text) => {
           setDisplayName(text);
@@ -46,6 +47,7 @@ export default function EditProfileScreen({
         }}
         mode="outlined"
         style={styles.input}
+        contentStyle={styles.inputContent}
         textColor={colors.text}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
@@ -66,7 +68,7 @@ export default function EditProfileScreen({
         buttonColor={colors.primary}
         textColor={colors.onPrimary}
       >
-        Save
+        {t.save}
       </Button>
     </View>
   );
@@ -81,6 +83,9 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.card,
     marginBottom: 8,
+  },
+  inputContent: {
+    textAlign: "right",
   },
   error: {
     color: colors.error,

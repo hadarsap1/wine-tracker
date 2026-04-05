@@ -4,6 +4,7 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { WineType } from "@/types/index";
 import type { ParsedLabelData } from "@/utils/parseLabelText";
+import type { ParsedOrderItem } from "@/utils/parseOrderText";
 
 // ─── Selected Wine (for Diary flow) ─────────────────────────────────────────
 
@@ -18,14 +19,15 @@ export type SelectedWine = {
 
 export type AuthStackParamList = {
   Login: undefined;
-  SignUp: undefined;
 };
 
 export type InventoryStackParamList = {
   InventoryList: undefined;
-  AddWine: undefined;
+  AddWine: { prefillName?: string; prefillType?: string } | undefined;
   WineDetail: { itemId: string; wineId: string };
   EditWine: { wineId: string; itemId: string };
+  ImportOrder: undefined;
+  ImportOrderReview: { items: ParsedOrderItem[]; rawText: string };
 };
 
 export type DiaryStackParamList = {
@@ -39,6 +41,9 @@ export type DiaryStackParamList = {
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   EditProfile: undefined;
+  ManageHousehold: undefined;
+  JoinHousehold: undefined;
+  Help: undefined;
 };
 
 export type SearchStackParamList = {
@@ -67,7 +72,6 @@ export type RootStackParamList = {
 // ─── Screen Props ───────────────────────────────────────────────────────────
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, "Login">;
-export type SignUpScreenProps = NativeStackScreenProps<AuthStackParamList, "SignUp">;
 
 export type InventoryListScreenProps = CompositeScreenProps<
   NativeStackScreenProps<InventoryStackParamList, "InventoryList">,
@@ -76,6 +80,8 @@ export type InventoryListScreenProps = CompositeScreenProps<
 export type AddWineScreenProps = NativeStackScreenProps<InventoryStackParamList, "AddWine">;
 export type WineDetailScreenProps = NativeStackScreenProps<InventoryStackParamList, "WineDetail">;
 export type EditWineScreenProps = NativeStackScreenProps<InventoryStackParamList, "EditWine">;
+export type ImportOrderScreenProps = NativeStackScreenProps<InventoryStackParamList, "ImportOrder">;
+export type ImportOrderReviewScreenProps = NativeStackScreenProps<InventoryStackParamList, "ImportOrderReview">;
 
 export type DiaryListScreenProps = CompositeScreenProps<
   NativeStackScreenProps<DiaryStackParamList, "DiaryList">,
@@ -91,6 +97,9 @@ export type ProfileMainScreenProps = CompositeScreenProps<
   BottomTabScreenProps<MainTabsParamList>
 >;
 export type EditProfileScreenProps = NativeStackScreenProps<ProfileStackParamList, "EditProfile">;
+export type ManageHouseholdScreenProps = NativeStackScreenProps<ProfileStackParamList, "ManageHousehold">;
+export type JoinHouseholdScreenProps = NativeStackScreenProps<ProfileStackParamList, "JoinHousehold">;
+export type HelpScreenProps = NativeStackScreenProps<ProfileStackParamList, "Help">;
 
 export type SearchMainScreenProps = CompositeScreenProps<
   NativeStackScreenProps<SearchStackParamList, "SearchMain">,

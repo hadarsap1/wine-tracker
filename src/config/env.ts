@@ -17,6 +17,9 @@ export const env = {
 
   // OpenAI API (LLM receipt parsing)
   openaiApiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? '',
+
+  // App public URL (used for invite links etc.)
+  appUrl: process.env.EXPO_PUBLIC_APP_URL ?? 'https://wine-tracker.web.app',
 } as const;
 
 /**

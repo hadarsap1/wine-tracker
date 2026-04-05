@@ -7,18 +7,34 @@ import {
   ScrollView,
 } from "react-native";
 import { Button, Text, TextInput, HelperText } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import type { SignUpScreenProps } from "@navigation/types";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { signUp, loading, error, clearError } = useAuthStore();
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const { signUp, signInWithGoogle, loading, error, clearError } = useAuthStore();
 
   const handleSignUp = async () => {
+    let valid = true;
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setEmailError(t.invalidEmail);
+      valid = false;
+    }
+    if (password.length < 6) {
+      setPasswordError(t.passwordTooShort);
+      valid = false;
+    }
+    if (!valid) return;
     try {
       await signUp(email.trim(), password, displayName.trim());
     } catch {
@@ -26,8 +42,9 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
     }
   };
 
-  const handleFieldChange = (setter: (v: string) => void) => (text: string) => {
+  const handleFieldChange = (setter: (v: string) => void, clearFieldError?: () => void) => (text: string) => {
     if (error) clearError();
+    clearFieldError?.();
     setter(text);
   };
 
@@ -41,17 +58,24 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
+          <View style={styles.iconContainer}>
+            <MaterialCommunityIcons
+              name="bottle-wine"
+              size={64}
+              color={colors.gold}
+            />
+          </View>
           <Text variant="headlineLarge" style={styles.title}>
-            Create Account
+            {t.signUpTitle}
           </Text>
           <Text variant="bodyLarge" style={styles.subtitle}>
-            Start tracking your wine collection
+            {t.signUpSubtitle}
           </Text>
         </View>
 
         <View style={styles.form}>
           <TextInput
-            label="Display Name"
+            label={t.displayName}
             value={displayName}
             onChangeText={handleFieldChange(setDisplayName)}
             mode="outlined"
@@ -62,23 +86,28 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
           />
 
           <TextInput
-            label="Email"
+            label={t.email}
             value={email}
-            onChangeText={handleFieldChange(setEmail)}
+            onChangeText={handleFieldChange(setEmail, () => setEmailError(""))}
             mode="outlined"
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            error={!!emailError}
             left={<TextInput.Icon icon="email-outline" />}
             style={styles.input}
           />
+          <HelperText type="error" visible={!!emailError}>
+            {emailError}
+          </HelperText>
 
           <TextInput
-            label="Password"
+            label={t.password}
             value={password}
-            onChangeText={handleFieldChange(setPassword)}
+            onChangeText={handleFieldChange(setPassword, () => setPasswordError(""))}
             mode="outlined"
             secureTextEntry={!showPassword}
+            error={!!passwordError}
             left={<TextInput.Icon icon="lock-outline" />}
             right={
               <TextInput.Icon
@@ -88,6 +117,9 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
             }
             style={styles.input}
           />
+          <HelperText type="error" visible={!!passwordError}>
+            {passwordError}
+          </HelperText>
 
           <HelperText type="error" visible={!!error}>
             {error}
@@ -101,7 +133,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
             style={styles.button}
             contentStyle={styles.buttonContent}
           >
-            Sign Up
+            {t.signUp}
           </Button>
 
           <Button
@@ -109,7 +141,20 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
             onPress={() => navigation.goBack()}
             style={styles.linkButton}
           >
-            Already have an account? Sign In
+            {t.hasAccount}
+          </Button>
+
+          <Text variant="labelSmall" style={styles.orText}>{t.orContinueWith}</Text>
+
+          <Button
+            mode="outlined"
+            onPress={async () => { try { await signInWithGoogle(); } catch {} }}
+            loading={loading}
+            disabled={loading}
+            icon="google"
+            style={styles.googleButton}
+          >
+            {t.signInWithGoogle}
           </Button>
         </View>
       </ScrollView>
@@ -129,10 +174,21 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 48,
+    marginBottom: 40,
+  },
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.gold + "40",
   },
   title: {
-    color: colors.primary,
+    color: colors.gold,
     fontWeight: "bold",
   },
   subtitle: {
@@ -154,5 +210,13 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     marginTop: 12,
+  },
+  orText: {
+    textAlign: "center",
+    color: colors.textSecondary,
+    marginVertical: 16,
+  },
+  googleButton: {
+    borderColor: colors.border,
   },
 });

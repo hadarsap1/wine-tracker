@@ -3,16 +3,17 @@ import {
   View,
   ScrollView,
   Pressable,
-  Alert,
   StyleSheet,
 } from "react-native";
-import { Text, TextInput, Button } from "react-native-paper";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { Text, TextInput, Button, HelperText } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
 import { useDiaryStore } from "@stores/diaryStore";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import * as diaryService from "@services/diary";
-import { uploadImage, diaryImagePath } from "@services/storage";
+import { uploadImage, deleteImage, diaryImagePath } from "@services/storage";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { RatingInput, ImagePickerSection } from "@components/diary";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { AddEntryScreenProps, SelectedWine } from "@navigation/types";
@@ -24,6 +25,7 @@ export default function AddEntryScreen({
 }: AddEntryScreenProps) {
   const profile = useAuthStore((s) => s.profile);
   const { addEntry } = useDiaryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
   const householdId = profile?.householdIds?.[0];
 
   const selectedWine = route.params?.selectedWine as SelectedWine | undefined;
@@ -32,6 +34,7 @@ export default function AddEntryScreen({
   const [notes, setNotes] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [ratingError, setRatingError] = useState("");
 
   const todayStr = new Date().toLocaleDateString();
 
@@ -50,11 +53,11 @@ export default function AddEntryScreen({
   const handleSubmit = async () => {
     if (!householdId) return;
     if (!selectedWine) {
-      Alert.alert("Missing wine", "Please select a wine first.");
+      showSnackbar(t.pleaseSelectWine, "error");
       return;
     }
     if (rating < 1) {
-      Alert.alert("Missing rating", "Please rate the wine (1-5 stars).");
+      setRatingError(t.pleaseRateWine);
       return;
     }
 
@@ -74,19 +77,25 @@ export default function AddEntryScreen({
         })
       );
 
-      await addEntry(householdId, entryId, {
-        wineId: selectedWine.wineId,
-        wineName: selectedWine.wineName,
-        wineType: selectedWine.wineType,
-        rating: rating as Rating,
-        notes: notes.trim() || undefined,
-        imageUrls,
-        inventoryItemId: selectedWine.inventoryItemId,
-      });
+      try {
+        await addEntry(householdId, entryId, {
+          wineId: selectedWine.wineId,
+          wineName: selectedWine.wineName,
+          wineType: selectedWine.wineType,
+          rating: rating as Rating,
+          notes: notes.trim() || undefined,
+          imageUrls,
+          inventoryItemId: selectedWine.inventoryItemId,
+        });
+      } catch (firestoreError) {
+        // Roll back uploaded images so Storage doesn't accumulate orphans
+        await Promise.allSettled(imageUrls.map((url) => deleteImage(url)));
+        throw firestoreError;
+      }
 
       navigation.goBack();
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setSaving(false);
     }
@@ -100,7 +109,7 @@ export default function AddEntryScreen({
     >
       {/* Wine Selection */}
       <Text variant="labelLarge" style={styles.label}>
-        Wine
+        {t.wine}
       </Text>
       <Pressable style={styles.wineSelector} onPress={handleSelectWine}>
         {selectedWine ? (
@@ -118,12 +127,12 @@ export default function AddEntryScreen({
               color={colors.textSecondary}
             />
             <Text variant="bodyMedium" style={styles.selectText}>
-              Tap to select a wine
+              {t.tapToSelectWine}
             </Text>
           </View>
         )}
         <MaterialCommunityIcons
-          name="chevron-right"
+          name="chevron-left"
           size={24}
           color={colors.textSecondary}
         />
@@ -131,13 +140,16 @@ export default function AddEntryScreen({
 
       {/* Rating */}
       <Text variant="labelLarge" style={styles.label}>
-        Rating
+        {t.rating}
       </Text>
-      <RatingInput value={rating} onChange={setRating} />
+      <RatingInput value={rating} onChange={(r) => { setRating(r); if (ratingError) setRatingError(""); }} />
+      <HelperText type="error" visible={!!ratingError}>
+        {ratingError}
+      </HelperText>
 
       {/* Date */}
       <Text variant="labelLarge" style={styles.label}>
-        Tasting Date
+        {t.tastingDate}
       </Text>
       <Text variant="bodyMedium" style={styles.dateText}>
         {todayStr}
@@ -145,7 +157,7 @@ export default function AddEntryScreen({
 
       {/* Notes */}
       <Text variant="labelLarge" style={styles.label}>
-        Notes
+        {t.notes}
       </Text>
       <TextInput
         value={notes}
@@ -153,8 +165,9 @@ export default function AddEntryScreen({
         mode="outlined"
         multiline
         numberOfLines={4}
-        placeholder="How did it taste? Aromas, flavors, pairings..."
+        placeholder={t.notesPlaceholder}
         style={styles.notesInput}
+        contentStyle={styles.inputContent}
         textColor={colors.text}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
@@ -178,7 +191,7 @@ export default function AddEntryScreen({
         buttonColor={colors.primary}
         textColor={colors.onPrimary}
       >
-        Save Entry
+        {t.saveEntry}
       </Button>
     </ScrollView>
   );
@@ -197,6 +210,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: 16,
     marginBottom: 8,
+    textAlign: "right",
+  },
+  inputContent: {
+    textAlign: "right",
   },
   wineSelector: {
     flexDirection: "row",

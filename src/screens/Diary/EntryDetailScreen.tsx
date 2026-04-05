@@ -3,13 +3,14 @@ import {
   View,
   ScrollView,
   Image,
-  Alert,
   StyleSheet,
 } from "react-native";
 import { Text, Button, Dialog, Portal } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useDiaryStore } from "@stores/diaryStore";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { RatingInput } from "@components/diary";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { EntryDetailScreenProps } from "@navigation/types";
@@ -21,6 +22,7 @@ export default function EntryDetailScreen({
   const { entryId } = route.params;
   const profile = useAuthStore((s) => s.profile);
   const { entries, deleteEntry } = useDiaryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
   const householdId = profile?.householdIds?.[0];
 
   const [deleteVisible, setDeleteVisible] = useState(false);
@@ -32,7 +34,7 @@ export default function EntryDetailScreen({
     return (
       <View style={styles.container}>
         <Text variant="bodyLarge" style={styles.notFound}>
-          Entry not found
+          {t.entryNotFound}
         </Text>
       </View>
     );
@@ -51,7 +53,7 @@ export default function EntryDetailScreen({
       setDeleteVisible(false);
       navigation.goBack();
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setDeleting(false);
     }
@@ -75,15 +77,19 @@ export default function EntryDetailScreen({
 
       {/* Rating */}
       <Text variant="labelLarge" style={styles.label}>
-        Rating
+        {t.rating}
       </Text>
-      <RatingInput value={entry.rating} size={32} />
+      {entry.rating === null ? (
+        <Text variant="bodyMedium" style={styles.unrated}>{t.unrated}</Text>
+      ) : (
+        <RatingInput value={entry.rating} size={32} />
+      )}
 
       {/* Notes */}
       {entry.notes ? (
         <>
           <Text variant="labelLarge" style={styles.label}>
-            Notes
+            {t.notes}
           </Text>
           <Text variant="bodyMedium" style={styles.notes}>
             {entry.notes}
@@ -95,16 +101,16 @@ export default function EntryDetailScreen({
       {entry.imageUrls?.length > 0 && (
         <>
           <Text variant="labelLarge" style={styles.label}>
-            Photos
+            {t.photos}
           </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.imageScroll}
           >
-            {entry.imageUrls.map((uri, index) => (
+            {entry.imageUrls.map((uri) => (
               <Image
-                key={uri + index}
+                key={uri}
                 source={{ uri }}
                 style={styles.photo}
               />
@@ -122,15 +128,34 @@ export default function EntryDetailScreen({
           buttonColor={colors.primary}
           textColor={colors.onPrimary}
         >
-          Edit
+          {t.edit}
         </Button>
+        {!entry.inventoryItemId && (
+          <Button
+            mode="outlined"
+            onPress={() =>
+              navigation.getParent()?.navigate("Inventory", {
+                screen: "AddWine",
+                params: {
+                  prefillName: entry.wineName,
+                  prefillType: entry.wineType,
+                },
+              })
+            }
+            style={styles.addToCellarButton}
+            textColor={colors.primary}
+            icon="plus"
+          >
+            {t.addToCellar}
+          </Button>
+        )}
         <Button
           mode="outlined"
           onPress={() => setDeleteVisible(true)}
           style={styles.deleteButton}
           textColor={colors.error}
         >
-          Delete
+          {t.delete}
         </Button>
       </View>
 
@@ -142,21 +167,21 @@ export default function EntryDetailScreen({
           style={styles.dialog}
         >
           <Dialog.Title style={styles.dialogTitle}>
-            Delete Entry?
+            {t.deleteEntry}
           </Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium" style={styles.dialogText}>
-              This will permanently delete this diary entry and its photos.
+              {t.deleteEntryMsg}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteVisible(false)}>Cancel</Button>
+            <Button onPress={() => setDeleteVisible(false)}>{t.cancel}</Button>
             <Button
               onPress={handleDelete}
               loading={deleting}
               textColor={colors.error}
             >
-              Delete
+              {t.delete}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -182,6 +207,7 @@ const styles = StyleSheet.create({
   wineName: {
     color: colors.text,
     marginBottom: 8,
+    textAlign: "right",
   },
   row: {
     flexDirection: "row",
@@ -200,6 +226,7 @@ const styles = StyleSheet.create({
   notes: {
     color: colors.textSecondary,
     lineHeight: 22,
+    textAlign: "right",
   },
   imageScroll: {
     gap: 10,
@@ -211,16 +238,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.card,
   },
+  unrated: {
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
   actions: {
-    flexDirection: "row",
     gap: 12,
     marginTop: 32,
   },
-  editButton: {
-    flex: 1,
+  editButton: {},
+  addToCellarButton: {
+    borderColor: colors.primary,
   },
   deleteButton: {
-    flex: 1,
     borderColor: colors.error,
   },
   dialog: {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -12,17 +12,25 @@ import {
 import { TextInput, Button, SegmentedButtons, Text } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
+import { useSnackbarStore } from "@stores/snackbarStore";
+import * as vivinoService from "@services/vivino";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
+import type { VivinoData } from "@/types/index";
+import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { ScanReviewScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
-const WINE_TYPE_BUTTONS = WINE_TYPES.map((t) => ({ value: t, label: t }));
+const WINE_TYPE_BUTTONS = WINE_TYPES.map((type) => ({
+  value: type,
+  label: t.wineTypeLabels[type] ?? type,
+}));
 
 const CONFIDENCE_COLORS: Record<string, string> = {
-  high: "#2e7d32",
-  medium: "#e65100",
-  low: "#616161",
+  high: "#1b5e36",
+  medium: "#7a5c00",
+  low: "#3a3a4a",
 };
 
 export default function ScanReviewScreen({
@@ -31,7 +39,9 @@ export default function ScanReviewScreen({
 }: ScanReviewScreenProps) {
   const { parsedData, imageUri, rawText } = route.params;
   const profile = useAuthStore((s) => s.profile);
-  const { addWine, loading } = useInventoryStore();
+  const { addWine } = useInventoryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
+  const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState(parsedData.name ?? "");
   const [type, setType] = useState<WineType>(parsedData.type ?? WineType.Red);
@@ -48,42 +58,94 @@ export default function ScanReviewScreen({
   const [notes, setNotes] = useState("");
   const [nameError, setNameError] = useState("");
   const [showRawText, setShowRawText] = useState(false);
+  const [vivinoData, setVivinoData] = useState<VivinoData | null | undefined>(undefined);
+  const [loadingVivino, setLoadingVivino] = useState(false);
+  const vivinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const householdId = profile?.householdIds?.[0];
 
+  // Re-fetch Vivino whenever name, producer, or vintage changes (debounced 800ms)
+  React.useEffect(() => {
+    const trimmed = name.trim();
+
+    // Reset badge immediately so stale data doesn't linger
+    setVivinoData(undefined);
+    setLoadingVivino(false);
+
+    if (trimmed.length < 3) return;
+
+    let cancelled = false;
+
+    if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+
+    vivinoDebounceRef.current = setTimeout(() => {
+      const query = [producer.trim(), trimmed].filter(Boolean).join(" ").trim();
+      const searchUrl = `https://www.vivino.com/search/wines?q=${encodeURIComponent(trimmed)}`;
+      setLoadingVivino(true);
+      vivinoService
+        .fetchVivinoData(query, vintage ? parseInt(vintage, 10) || undefined : undefined)
+        .then((data) => {
+          if (!cancelled) {
+            setVivinoData(data ? { ...data, wineUrl: data.wineUrl ?? searchUrl } : null);
+            setLoadingVivino(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setVivinoData(null);
+            setLoadingVivino(false);
+          }
+        });
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+    };
+  }, [name, producer, vintage]);
+
   const handleSave = async () => {
     if (!name.trim()) {
-      setNameError("Wine name is required");
+      setNameError(t.wineNameRequired);
       return;
     }
     const qty = parseInt(quantity, 10);
     if (isNaN(qty) || qty < 1) return;
-    if (!householdId) return;
+    if (!householdId) {
+      showSnackbar(t.noHousehold, "error");
+      return;
+    }
 
-    await addWine(
-      householdId,
-      {
-        name: name.trim(),
-        type,
-        producer: producer.trim() || undefined,
-        region: region.trim() || undefined,
-        country: country.trim() || undefined,
-        vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
-        grape: grape.trim() || undefined,
-        notes: notes.trim() || undefined,
-      },
-      {
-        quantity: qty,
-        location: location.trim() || undefined,
-        purchasePrice: purchasePrice
-          ? parseFloat(purchasePrice) || undefined
-          : undefined,
-      }
-    );
-
-    Alert.alert("Success", "Wine added to your cellar!", [
-      { text: "OK", onPress: () => navigation.popToTop() },
-    ]);
+    setSaving(true);
+    try {
+      await addWine(
+        householdId,
+        {
+          name: name.trim(),
+          type,
+          producer: producer.trim() || undefined,
+          region: region.trim() || undefined,
+          country: country.trim() || undefined,
+          vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
+          grape: grape.trim() || undefined,
+          notes: notes.trim() || undefined,
+          vivinoData: vivinoData ?? undefined,
+        },
+        {
+          quantity: qty,
+          location: location.trim() || undefined,
+          purchasePrice: purchasePrice
+            ? parseFloat(purchasePrice) || undefined
+            : undefined,
+        }
+      );
+      showSnackbar(t.addedToCellar, "success");
+      navigation.popToTop();
+    } catch (e) {
+      showSnackbar((e as Error).message || t.failedToCreateWine, "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -101,12 +163,24 @@ export default function ScanReviewScreen({
         >
           <Text variant="labelMedium" style={styles.confidenceText}>
             {parsedData.confidence === "high"
-              ? "High confidence - most fields detected"
+              ? t.confidenceHigh
               : parsedData.confidence === "medium"
-              ? "Medium confidence - some fields detected"
-              : "Low confidence - please review all fields"}
+              ? t.confidenceMedium
+              : t.confidenceLow}
           </Text>
         </View>
+
+        {/* Vivino Rating */}
+        {(loadingVivino || vivinoData !== undefined) && (
+          <View style={styles.vivinoRow}>
+            <VivinoBadge data={vivinoData} loading={loadingVivino} />
+            {vivinoData?.wineName && (
+              <Text variant="labelSmall" style={styles.vivinoMatchName}>
+                {t.vivinoMatched}: {vivinoData.wineName}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Photo Thumbnail */}
         <Image source={{ uri: imageUri }} style={styles.thumbnail} />
@@ -114,7 +188,7 @@ export default function ScanReviewScreen({
         {/* Raw OCR Text Toggle */}
         <Pressable onPress={() => setShowRawText(!showRawText)}>
           <Text variant="labelMedium" style={styles.rawTextToggle}>
-            {showRawText ? "Hide" : "Show"} raw OCR text
+            {showRawText ? t.hideRawText : t.showRawText}
           </Text>
         </Pressable>
         {showRawText && (
@@ -127,7 +201,7 @@ export default function ScanReviewScreen({
 
         {/* Form Fields */}
         <TextInput
-          label="Wine Name *"
+          label={t.wineName}
           value={name}
           onChangeText={(v) => {
             setName(v);
@@ -135,6 +209,7 @@ export default function ScanReviewScreen({
           }}
           error={!!nameError}
           style={styles.input}
+          contentStyle={styles.inputContent}
           textColor={colors.text}
         />
         {nameError ? (
@@ -144,7 +219,7 @@ export default function ScanReviewScreen({
         ) : null}
 
         <Text variant="labelLarge" style={styles.sectionLabel}>
-          Wine Type
+          {t.wineType}
         </Text>
         <ScrollView
           horizontal
@@ -160,92 +235,101 @@ export default function ScanReviewScreen({
         </ScrollView>
 
         <TextInput
-          label="Producer"
+          label={t.producer}
           value={producer}
           onChangeText={setProducer}
           style={styles.input}
+          contentStyle={styles.inputContent}
           textColor={colors.text}
         />
         <View style={styles.row}>
           <TextInput
-            label="Region"
+            label={t.region}
             value={region}
             onChangeText={setRegion}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Country"
+            label={t.country}
             value={country}
             onChangeText={setCountry}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
         <View style={styles.row}>
           <TextInput
-            label="Vintage"
+            label={t.vintage}
             value={vintage}
             onChangeText={setVintage}
             keyboardType="numeric"
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Grape"
+            label={t.grape}
             value={grape}
             onChangeText={setGrape}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
         <View style={styles.row}>
           <TextInput
-            label="Quantity"
+            label={t.quantity}
             value={quantity}
             onChangeText={setQuantity}
             keyboardType="numeric"
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Price"
+            label={t.price}
             value={purchasePrice}
             onChangeText={setPurchasePrice}
             keyboardType="decimal-pad"
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
         <TextInput
-          label="Storage Location"
+          label={t.storageLocation}
           value={location}
           onChangeText={setLocation}
           style={styles.input}
+          contentStyle={styles.inputContent}
           textColor={colors.text}
         />
         <TextInput
-          label="Notes"
+          label={t.notes}
           value={notes}
           onChangeText={setNotes}
           multiline
           numberOfLines={3}
           style={styles.input}
+          contentStyle={styles.inputContent}
           textColor={colors.text}
         />
 
         <Button
           mode="contained"
           onPress={handleSave}
-          loading={loading}
-          disabled={loading}
+          loading={saving}
+          disabled={saving}
           style={styles.submitButton}
           buttonColor={colors.primary}
         >
-          Save to Cellar
+          {t.saveToCellar}
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -260,6 +344,14 @@ const styles = StyleSheet.create({
   scroll: {
     padding: 16,
     paddingBottom: 40,
+  },
+  vivinoRow: {
+    marginBottom: 12,
+  },
+  vivinoMatchName: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontStyle: "italic",
   },
   confidenceBanner: {
     borderRadius: 8,
@@ -295,10 +387,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: colors.card,
   },
+  inputContent: {
+    textAlign: "right",
+  },
   sectionLabel: {
     color: colors.textSecondary,
     marginBottom: 8,
     marginTop: 4,
+    textAlign: "right",
   },
   typeScroll: {
     marginBottom: 16,
@@ -316,7 +412,8 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: -8,
     marginBottom: 8,
-    marginLeft: 4,
+    marginRight: 4,
+    textAlign: "right",
   },
   submitButton: {
     marginTop: 16,

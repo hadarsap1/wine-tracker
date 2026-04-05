@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   quantity: {
     color: colors.primary,
     fontWeight: "bold",
-    marginLeft: 12,
+    marginStart: 12,
   },
 });

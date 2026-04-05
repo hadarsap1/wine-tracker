@@ -32,10 +32,11 @@ export interface DiaryFormData {
   wineId: string;
   wineName: string;
   wineType: WineType;
-  rating: Rating;
+  rating: Rating | null;
   notes?: string;
   imageUrls: string[];
   inventoryItemId?: string;
+  wantToOrder?: boolean;
 }
 
 export function generateEntryId(householdId: string): string {
@@ -58,7 +59,7 @@ export async function createDiaryEntry(
     wineId: data.wineId,
     wineName: data.wineName,
     wineType: data.wineType,
-    rating: data.rating,
+    rating: data.rating ?? null,
     imageUrls: data.imageUrls,
     tastingDate: serverTimestamp(),
     createdAt: serverTimestamp(),
@@ -66,6 +67,7 @@ export async function createDiaryEntry(
   };
   if (data.notes) entry.notes = data.notes;
   if (data.inventoryItemId) entry.inventoryItemId = data.inventoryItemId;
+  if (data.wantToOrder) entry.wantToOrder = data.wantToOrder;
   await setDoc(ref, entry);
 }
 
@@ -97,7 +99,7 @@ export async function getDiaryEntry(
 export async function updateDiaryEntry(
   householdId: string,
   entryId: string,
-  data: Partial<Pick<DiaryEntry, "rating" | "notes" | "imageUrls">>
+  data: Partial<Pick<DiaryEntry, "rating" | "notes" | "imageUrls" | "wantToOrder">>
 ): Promise<void> {
   const ref = doc(
     db,

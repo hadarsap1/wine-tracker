@@ -82,6 +82,45 @@ const GRAPE_VARIETIES = [
   "Touriga Nacional", "Garnacha", "Monastrell",
 ];
 
+const GRAPE_TO_TYPE: Partial<Record<string, WineType>> = {
+  "Cabernet Sauvignon": WineType.Red,
+  "Merlot": WineType.Red,
+  "Pinot Noir": WineType.Red,
+  "Syrah": WineType.Red,
+  "Shiraz": WineType.Red,
+  "Tempranillo": WineType.Red,
+  "Sangiovese": WineType.Red,
+  "Nebbiolo": WineType.Red,
+  "Malbec": WineType.Red,
+  "Grenache": WineType.Red,
+  "Mourvèdre": WineType.Red,
+  "Mourvedre": WineType.Red,
+  "Zinfandel": WineType.Red,
+  "Primitivo": WineType.Red,
+  "Barbera": WineType.Red,
+  "Cabernet Franc": WineType.Red,
+  "Petit Verdot": WineType.Red,
+  "Carmenère": WineType.Red,
+  "Carmenere": WineType.Red,
+  "Touriga Nacional": WineType.Red,
+  "Garnacha": WineType.Red,
+  "Monastrell": WineType.Red,
+  "Chardonnay": WineType.White,
+  "Sauvignon Blanc": WineType.White,
+  "Riesling": WineType.White,
+  "Pinot Grigio": WineType.White,
+  "Pinot Gris": WineType.White,
+  "Gewürztraminer": WineType.White,
+  "Gewurztraminer": WineType.White,
+  "Viognier": WineType.White,
+  "Chenin Blanc": WineType.White,
+  "Sémillon": WineType.White,
+  "Semillon": WineType.White,
+  "Muscadet": WineType.White,
+  "Muscat": WineType.White,
+  "Moscato": WineType.White,
+};
+
 function extractGrape(text: string): string | undefined {
   const lower = text.toLowerCase();
   for (const grape of GRAPE_VARIETIES) {
@@ -134,6 +173,37 @@ function extractCountryRegion(text: string): { country?: string; region?: string
 
 // ─── Name & Producer ─────────────────────────────────────────────────────────
 
+// Patterns that indicate OCR noise, not wine name/producer
+const NOISE_PATTERNS = [
+  /^\d+[\.,]?\d*\s*%/,           // alcohol/volume: "13.5%", "135%", "14% vol"
+  /^\s*vol\.?\s*$/i,              // "vol" or "vol." as the entire line
+  /^\d+(\.\d+)?\s*(cl|ml|l)\b/i, // bottle size: "75cl", "750ml"
+  /^e\s*\d/i,                    // "e 75cl"
+  /^lot\s*#?\d/i,                // lot numbers
+  /^[A-Z0-9]{8,}$/,              // barcodes / product codes
+  /^\d{6,}$/,                    // long number sequences
+  /^www\./i,                     // URLs
+  /^\+?\d[\d\s\-().]{7,}$/,      // phone numbers
+  /^\d{1,3}$|^\d{1,3}[.,]\d{1,2}$/, // standalone short numbers: "25", "13", "4.5"
+  /\bsince\b/i,                  // "Since 1870", "est. since"
+  /\best\.?\s*\d{4}/i,           // "Est. 1870"
+  /^(family\s+)?(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina)\b/i, // winery boilerplate lines
+  /contain[s]?\s+sulph/i,        // "contains sulphites"
+  /^(produce[d]?|bottled|mis en bouteille)/i, // production notes
+  /^\p{Script=Hebrew}/u,         // Hebrew text (not a wine name/producer)
+];
+
+function isNoiseLine(line: string): boolean {
+  return NOISE_PATTERNS.some((re) => re.test(line.trim()));
+}
+
+// Words that suggest a line is a winery/producer, not a wine range name
+const PRODUCER_HINT_RE = /\b(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina|family|distillery)\b/i;
+
+function wordCount(s: string): number {
+  return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
 function extractNameAndProducer(
   text: string,
   usedTerms: string[]
@@ -143,20 +213,39 @@ function extractNameAndProducer(
     .map((l) => l.trim())
     .filter((l) => l.length > 1);
 
-  // Filter out lines that are just used terms (vintage, grape, type keywords, etc.)
   const usedLower = usedTerms.map((t) => t.toLowerCase());
   const unusedLines = lines.filter((line) => {
     const lineLower = line.toLowerCase();
-    // Skip lines that are purely a year or purely a known keyword
-    if (/^\d{4}$/.test(line)) return false;
+    if (/^\d{4}$/.test(line)) return false; // pure vintage year
+    if (isNoiseLine(line)) return false;
     return !usedLower.some((term) => lineLower === term);
   });
 
   if (unusedLines.length === 0) return {};
   if (unusedLines.length === 1) return { name: unusedLines[0] };
 
-  // First prominent unused line is likely the name, second is the producer
-  return { name: unusedLines[0], producer: unusedLines[1] };
+  // Heuristic: wine range names are short (1-3 words), producer names can be longer
+  // or contain winery-hint words.
+  // Partition lines into "name candidates" (short, no winery hints) and others.
+  const nameCandidates = unusedLines.filter(
+    (l) => wordCount(l) <= 3 && !PRODUCER_HINT_RE.test(l)
+  );
+  const producerCandidates = unusedLines.filter(
+    (l) => wordCount(l) > 3 || PRODUCER_HINT_RE.test(l)
+  );
+
+  // Prefer the shortest name candidate as the wine name
+  const name =
+    nameCandidates.length > 0
+      ? nameCandidates.reduce((a, b) => (a.length <= b.length ? a : b))
+      : unusedLines[0];
+
+  // Producer: first candidate that isn't the chosen name
+  const producer =
+    producerCandidates.find((l) => l !== name) ??
+    unusedLines.find((l) => l !== name);
+
+  return { name, producer };
 }
 
 // ─── Main Parser ─────────────────────────────────────────────────────────────
@@ -167,10 +256,11 @@ export function parseLabelText(rawText: string): ParsedLabelData {
   const vintage = extractVintage(rawText);
   if (vintage) usedTerms.push(String(vintage));
 
-  const type = extractType(rawText);
-
   const grape = extractGrape(rawText);
   if (grape) usedTerms.push(grape);
+
+  // Infer type from label keywords first, then fall back to grape variety
+  const type = extractType(rawText) ?? (grape ? GRAPE_TO_TYPE[grape] : undefined);
 
   const { country, region } = extractCountryRegion(rawText);
   if (region) usedTerms.push(region);

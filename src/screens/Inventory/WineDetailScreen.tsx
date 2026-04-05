@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import {
   Text,
@@ -12,10 +12,14 @@ import {
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
+import * as vivinoService from "@services/vivino";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
+import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { WineDetailScreenProps } from "@navigation/types";
-import type { AppWine } from "@/types/index";
+import type { AppWine, VivinoData } from "@/types/index";
 
 export default function WineDetailScreen({
   route,
@@ -23,11 +27,20 @@ export default function WineDetailScreen({
 }: WineDetailScreenProps) {
   const { itemId, wineId } = route.params;
   const profile = useAuthStore((s) => s.profile);
-  const { items, updateItem, deleteItem } = useInventoryStore();
+
+  const { items, updateItem, deleteItem, openBottle } = useInventoryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
 
   const [wine, setWine] = useState<AppWine | null>(null);
   const [loadingWine, setLoadingWine] = useState(true);
+  const [quantityLoading, setQuantityLoading] = useState(false);
+  const [vivinoData, setVivinoData] = useState<VivinoData | null | undefined>(undefined);
+  const [loadingVivino, setLoadingVivino] = useState(false);
+  const vivinoFetchIdRef = useRef(0);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [openBottleDialogVisible, setOpenBottleDialogVisible] = useState(false);
+  const [arrivedDialogVisible, setArrivedDialogVisible] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
@@ -35,15 +48,41 @@ export default function WineDetailScreen({
   const fetchWine = useCallback(async () => {
     if (!householdId) return;
     setLoadingWine(true);
-    const w = await inventoryService.getWine(householdId, wineId);
-    if (w) {
-      setWine({
-        ...w,
-        createdAt: w.createdAt?.toDate?.() ?? new Date(),
-        updatedAt: w.updatedAt?.toDate?.() ?? new Date(),
-      } as AppWine);
+    try {
+      const w = await inventoryService.getWine(householdId, wineId);
+      if (w) {
+        const appWine: AppWine = {
+          ...w,
+          createdAt: w.createdAt?.toDate?.() ?? new Date(),
+          updatedAt: w.updatedAt?.toDate?.() ?? new Date(),
+        } as AppWine;
+        setWine(appWine);
+
+        // Use cached Vivino data if fresh (< 7 days), otherwise fetch
+        const cached = w.vivinoData;
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const searchUrl = `https://www.vivino.com/search/wines?q=${encodeURIComponent(w.name)}`;
+        if (cached && cached.fetchedAt.toMillis() > sevenDaysAgo) {
+          setVivinoData({ ...cached, wineUrl: cached.wineUrl ?? searchUrl });
+        } else {
+          const fetchId = ++vivinoFetchIdRef.current;
+          setLoadingVivino(true);
+          const fetched = await vivinoService.fetchVivinoData(w.name, w.vintage);
+          if (vivinoFetchIdRef.current !== fetchId) return; // stale — newer fetch in progress
+          const withUrl = fetched ? { ...fetched, wineUrl: fetched.wineUrl ?? searchUrl } : null;
+          setVivinoData(withUrl);
+          setLoadingVivino(false);
+          // Only write to Firestore when we got a result and it differs from cache
+          if (withUrl && withUrl.score !== cached?.score) {
+            await inventoryService.updateWine(householdId, wineId, { vivinoData: withUrl });
+          }
+        }
+      }
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setLoadingWine(false);
     }
-    setLoadingWine(false);
   }, [householdId, wineId]);
 
   useEffect(() => {
@@ -51,9 +90,14 @@ export default function WineDetailScreen({
   }, [fetchWine]);
 
   const handleQuantityChange = async (delta: number) => {
-    if (!householdId || !item) return;
+    if (!householdId || !item || quantityLoading) return;
     const newQty = Math.max(0, item.quantity + delta);
-    await updateItem(householdId, itemId, { quantity: newQty });
+    setQuantityLoading(true);
+    try {
+      await updateItem(householdId, itemId, { quantity: newQty });
+    } finally {
+      setQuantityLoading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -61,6 +105,35 @@ export default function WineDetailScreen({
     setDeleteDialogVisible(false);
     await deleteItem(householdId, itemId);
     navigation.goBack();
+  };
+
+  const handleOpenBottle = async () => {
+    if (!householdId || !item) return;
+    setOpenBottleDialogVisible(false);
+    setActionLoading(true);
+    try {
+      await openBottle(householdId, itemId, item.wineId, item.wineName, item.wineType);
+      showSnackbar(t.bottleOpened, "success");
+      navigation.goBack();
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMarkArrived = async () => {
+    if (!householdId) return;
+    setArrivedDialogVisible(false);
+    setActionLoading(true);
+    try {
+      await updateItem(householdId, itemId, { status: "in_stock" });
+      showSnackbar(t.markAsArrived, "success");
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loadingWine || !item) {
@@ -82,61 +155,106 @@ export default function WineDetailScreen({
 
       <Divider style={styles.divider} />
 
-      {/* Quantity Controls */}
-      <View style={styles.quantitySection}>
-        <Text variant="titleMedium" style={styles.label}>
-          Quantity
+      {/* Status badge */}
+      {(item.status ?? "in_stock") === "on_the_way" && (
+        <Text variant="labelLarge" style={styles.onTheWayBadge}>
+          {t.onTheWay}
         </Text>
-        <View style={styles.quantityControls}>
-          <IconButton
-            icon="minus"
-            mode="outlined"
-            onPress={() => handleQuantityChange(-1)}
-            disabled={item.quantity <= 0}
-            iconColor={colors.primary}
-          />
-          <Text variant="headlineMedium" style={styles.quantityText}>
-            {item.quantity}
-          </Text>
-          <IconButton
-            icon="plus"
-            mode="outlined"
-            onPress={() => handleQuantityChange(1)}
-            iconColor={colors.primary}
-          />
-        </View>
-      </View>
+      )}
 
-      <Divider style={styles.divider} />
+      {/* Quantity Controls — only for in-stock */}
+      {(item.status ?? "in_stock") === "in_stock" && (
+        <>
+          <View style={styles.quantitySection}>
+            <Text variant="titleMedium" style={styles.sectionLabel}>
+              {t.quantity}
+            </Text>
+            <View style={styles.quantityControls}>
+              <IconButton
+                icon="minus"
+                mode="outlined"
+                onPress={() => handleQuantityChange(-1)}
+                disabled={item.quantity <= 0 || quantityLoading}
+                iconColor={colors.primary}
+              />
+              <Text variant="headlineMedium" style={styles.quantityText}>
+                {item.quantity}
+              </Text>
+              <IconButton
+                icon="plus"
+                mode="outlined"
+                onPress={() => handleQuantityChange(1)}
+                disabled={quantityLoading}
+                iconColor={colors.primary}
+              />
+            </View>
+          </View>
+          <Divider style={styles.divider} />
+        </>
+      )}
+
+      {/* Vivino Rating */}
+      {(loadingVivino || vivinoData !== undefined) && (
+        <View style={styles.vivinoSection}>
+          <VivinoBadge data={vivinoData} loading={loadingVivino} />
+        </View>
+      )}
 
       {/* Wine Details */}
       <View style={styles.detailsSection}>
-        {wine?.producer && <DetailRow label="Producer" value={wine.producer} />}
-        {wine?.region && <DetailRow label="Region" value={wine.region} />}
-        {wine?.country && <DetailRow label="Country" value={wine.country} />}
+        <Text variant="titleMedium" style={styles.sectionLabel}>
+          {t.stackTitles.wineDetail}
+        </Text>
+        <Divider style={styles.sectionDivider} />
+        {wine?.producer && <DetailRow label={t.producer} value={wine.producer} />}
+        {wine?.region && <DetailRow label={t.region} value={wine.region} />}
+        {wine?.country && <DetailRow label={t.country} value={wine.country} />}
         {wine?.vintage && (
-          <DetailRow label="Vintage" value={String(wine.vintage)} />
+          <DetailRow label={t.vintage} value={String(wine.vintage)} />
         )}
-        {wine?.grape && <DetailRow label="Grape" value={wine.grape} />}
-        {item.location && <DetailRow label="Location" value={item.location} />}
+        {wine?.grape && <DetailRow label={t.grape} value={wine.grape} />}
+        {item.location && <DetailRow label={t.location} value={item.location} />}
         {item.purchasePrice != null && (
           <DetailRow
-            label="Purchase Price"
+            label={t.purchasePrice}
             value={`$${item.purchasePrice.toFixed(2)}`}
           />
         )}
-        {wine?.notes && <DetailRow label="Notes" value={wine.notes} />}
+        {wine?.notes && <DetailRow label={t.notes} value={wine.notes} />}
       </View>
 
       {/* Actions */}
       <View style={styles.actions}>
+        {(item.status ?? "in_stock") === "on_the_way" ? (
+          <Button
+            mode="contained"
+            onPress={() => setArrivedDialogVisible(true)}
+            style={styles.editButton}
+            buttonColor={colors.primary}
+            loading={actionLoading}
+            icon="home-import-outline"
+          >
+            {t.markAsArrived}
+          </Button>
+        ) : (
+          <Button
+            mode="contained"
+            onPress={() => setOpenBottleDialogVisible(true)}
+            style={styles.editButton}
+            buttonColor={colors.primary}
+            loading={actionLoading}
+            icon="bottle-wine"
+          >
+            {t.openBottle}
+          </Button>
+        )}
         <Button
-          mode="contained"
+          mode="outlined"
           onPress={() => navigation.navigate("EditWine", { wineId, itemId })}
           style={styles.editButton}
-          buttonColor={colors.primary}
+          textColor={colors.primary}
         >
-          Edit
+          {t.edit}
         </Button>
         <Button
           mode="outlined"
@@ -144,9 +262,43 @@ export default function WineDetailScreen({
           style={styles.deleteButton}
           textColor={colors.error}
         >
-          Delete
+          {t.delete}
         </Button>
       </View>
+
+      <Portal>
+        <Dialog
+          visible={openBottleDialogVisible}
+          onDismiss={() => setOpenBottleDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.openBottleConfirm}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={styles.dialogText}>{t.openBottleMsg}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setOpenBottleDialogVisible(false)} textColor={colors.textSecondary}>{t.cancel}</Button>
+            <Button onPress={handleOpenBottle} textColor={colors.primary}>{t.openBottle}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      <Portal>
+        <Dialog
+          visible={arrivedDialogVisible}
+          onDismiss={() => setArrivedDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.markAsArrivedConfirm}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={styles.dialogText}>{t.markAsArrivedMsg}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setArrivedDialogVisible(false)} textColor={colors.textSecondary}>{t.cancel}</Button>
+            <Button onPress={handleMarkArrived} textColor={colors.primary}>{t.ok}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       <Portal>
         <Dialog
@@ -155,20 +307,19 @@ export default function WineDetailScreen({
           style={styles.dialog}
         >
           <Dialog.Title style={styles.dialogTitle}>
-            Remove from cellar?
+            {t.removeFromCellar}
           </Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium" style={styles.dialogText}>
-              This will remove the inventory entry. The wine data will be kept
-              for diary references.
+              {t.removeFromCellarMsg}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDeleteDialogVisible(false)}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button onPress={handleDelete} textColor={colors.error}>
-              Delete
+              {t.delete}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -203,7 +354,7 @@ const detailStyles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     textAlign: "right",
-    marginLeft: 16,
+    marginStart: 16,
   },
 });
 
@@ -225,9 +376,20 @@ const styles = StyleSheet.create({
   header: {
     gap: 12,
   },
+  onTheWayBadge: {
+    color: colors.onPrimary,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: "flex-end",
+    marginTop: 4,
+    overflow: "hidden",
+  },
   name: {
     color: colors.text,
     fontWeight: "bold",
+    textAlign: "right",
   },
   divider: {
     backgroundColor: colors.border,
@@ -252,8 +414,20 @@ const styles = StyleSheet.create({
     minWidth: 40,
     textAlign: "center",
   },
+  vivinoSection: {
+    marginBottom: 20,
+  },
   detailsSection: {
     gap: 4,
+  },
+  sectionLabel: {
+    color: colors.gold,
+    marginBottom: 4,
+    textAlign: "right",
+  },
+  sectionDivider: {
+    backgroundColor: colors.border,
+    marginBottom: 8,
   },
   actions: {
     marginTop: 32,

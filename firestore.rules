@@ -36,7 +36,7 @@ service cloud.firestore {
     }
 
     function isValidRating(val) {
-      return val is int && val >= 1 && val <= 5;
+      return val == null || (val is int && val >= 1 && val <= 5);
     }
 
     function isValidReceiptStatus(val) {
@@ -85,7 +85,7 @@ service cloud.firestore {
         allow create: if isSignedIn()
           && (isAdmin(householdId) || incomingData().userId == request.auth.uid)
           && isValidString(incomingData().displayName)
-          && isValidString(incomingData().email)
+          && incomingData().email is string
           && incomingData().role in ['admin', 'member'];
 
         allow update: if isAdmin(householdId)
@@ -164,6 +164,28 @@ service cloud.firestore {
 
         allow delete: if isAdmin(householdId);
       }
+    }
+
+    // ── /invites/{inviteId} ───────────────────────────────────────────────
+    // Any signed-in user can read an invite (to validate the code).
+    // Only household admins can create invites.
+    // Redemption (marking used + adding member) is handled via a write
+    // that any signed-in user can do to their own invite doc.
+
+    match /invites/{inviteId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && isValidString(incomingData().householdId)
+        && incomingData().createdBy == request.auth.uid
+        && incomingData().used == false;
+
+      // Allow the redeemer to mark the invite as used
+      allow update: if isSignedIn()
+        && resource.data.used == false
+        && incomingData().used == true;
+
+      allow delete: if false;
     }
 
     // ── Deny everything else ──────────────────────────────────────────────

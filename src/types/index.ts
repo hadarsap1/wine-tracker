@@ -75,6 +75,8 @@ export interface VivinoData {
   score: number;
   ratings: number;
   imageUrl?: string;
+  wineName?: string;
+  wineUrl?: string;
   fetchedAt: Timestamp;
 }
 
@@ -125,11 +127,14 @@ export interface Wine extends FirestoreDoc {
   notes?: string;
 }
 
+export type InventoryStatus = "in_stock" | "on_the_way";
+
 export interface InventoryItem extends FirestoreDoc {
   wineId: string;
   wineName: string;
   wineType: WineType;
   quantity: number;
+  status: InventoryStatus;
   location?: string;
   purchaseDate?: Timestamp;
   purchasePrice?: number;
@@ -140,11 +145,19 @@ export interface DiaryEntry extends FirestoreDoc {
   wineId: string;
   wineName: string;
   wineType: WineType;
-  rating: Rating;
+  rating: Rating | null;
   notes?: string;
   imageUrls: string[];
   tastingDate: Timestamp;
   inventoryItemId?: string;
+  wantToOrder?: boolean;
+}
+
+export interface HouseholdInvite extends FirestoreDoc {
+  householdId: string;
+  createdBy: string;
+  expiresAt: Timestamp;
+  used: boolean;
 }
 
 export interface Receipt extends FirestoreDoc {
@@ -188,4 +201,5 @@ export const COLLECTIONS = {
   inventoryItems: "inventoryItems",
   diaryEntries: "diaryEntries",
   receipts: "receipts",
+  invites: "invites",
 } as const;

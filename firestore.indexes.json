@@ -23,13 +23,6 @@
         { "fieldPath": "rating", "order": "DESCENDING" },
         { "fieldPath": "tastingDate", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "wines",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "nameNormalized", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []

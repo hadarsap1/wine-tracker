@@ -7,9 +7,10 @@ service firebase.storage {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Household members can read/write household uploads
+    // Only household members can read/write household uploads
     match /households/{householdId}/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/households/$(householdId)/members/$(request.auth.uid));
     }
   }
 }

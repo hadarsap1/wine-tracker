@@ -5,10 +5,12 @@ import { useAuthStore } from "@stores/authStore";
 import * as householdService from "@services/household";
 import { ProfileHeader, SettingsRow } from "@components/profile";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
 import type { ProfileMainScreenProps } from "@navigation/types";
 
 const WINE_TYPE_OPTIONS = Object.values(WineType);
+const CURRENCY_OPTIONS = ["USD", "EUR", "ILS", "GBP", "CAD", "AUD", "JPY", "CHF"];
 
 export default function ProfileMainScreen({
   navigation,
@@ -18,6 +20,7 @@ export default function ProfileMainScreen({
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [signOutDialogVisible, setSignOutDialogVisible] = useState(false);
   const [wineTypeDialogVisible, setWineTypeDialogVisible] = useState(false);
+  const [currencyDialogVisible, setCurrencyDialogVisible] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,10 +71,10 @@ export default function ProfileMainScreen({
     return (
       <View style={[styles.container, styles.centered]}>
         <Text variant="bodyLarge" style={{ color: colors.text, marginBottom: 16 }}>
-          Unable to load profile
+          {t.unableToLoadProfile}
         </Text>
         <Button mode="contained" onPress={() => signOut()} buttonColor={colors.primary}>
-          Sign Out & Try Again
+          {t.signOutAndRetry}
         </Button>
       </View>
     );
@@ -81,7 +84,7 @@ export default function ProfileMainScreen({
     <ScrollView style={styles.container}>
       {signOutError ? (
         <Text variant="bodySmall" style={styles.errorBanner}>
-          Sign out failed: {signOutError}
+          {t.signOutFailed}: {signOutError}
         </Text>
       ) : null}
       <ProfileHeader
@@ -91,50 +94,67 @@ export default function ProfileMainScreen({
 
       {/* Collection */}
       <Text variant="labelLarge" style={styles.sectionHeader}>
-        Collection
+        {t.collection}
       </Text>
       <SettingsRow
         icon="home-group"
-        label="Household"
-        value={householdLoading ? "Loading…" : householdName || "—"}
+        label={t.household}
+        value={householdLoading ? t.loading : householdName || "—"}
         showChevron={false}
       />
 
       {/* Preferences */}
       <Text variant="labelLarge" style={styles.sectionHeader}>
-        Preferences
+        {t.preferences}
       </Text>
       <SettingsRow
         icon="glass-wine"
-        label="Default Wine Type"
-        value={profile.preferences.defaultWineType || "None"}
+        label={t.defaultWineType}
+        value={profile.preferences.defaultWineType
+          ? (t.wineTypeLabels[profile.preferences.defaultWineType] ?? profile.preferences.defaultWineType)
+          : t.noneOption}
         onPress={() => setWineTypeDialogVisible(true)}
       />
       <SettingsRow
         icon="currency-usd"
-        label="Currency"
+        label={t.currency}
         value={profile.preferences.currency}
-        showChevron={false}
+        onPress={() => setCurrencyDialogVisible(true)}
       />
 
       {/* Account */}
       <Text variant="labelLarge" style={styles.sectionHeader}>
-        Account
+        {t.account}
       </Text>
       <SettingsRow
         icon="account-edit"
-        label="Edit Profile"
+        label={t.editProfile}
         onPress={() => navigation.navigate("EditProfile")}
       />
       <SettingsRow
+        icon="account-multiple-plus"
+        label={t.manageHousehold}
+        onPress={() => navigation.navigate("ManageHousehold")}
+      />
+
+      {/* Support */}
+      <Text variant="labelLarge" style={styles.sectionHeader}>
+        {t.help}
+      </Text>
+      <SettingsRow
+        icon="help-circle-outline"
+        label={t.help}
+        onPress={() => navigation.navigate("Help")}
+      />
+      <SettingsRow
         icon="logout"
-        label="Sign Out"
+        label={t.signOut}
         onPress={() => setSignOutDialogVisible(true)}
         showChevron={false}
       />
 
       <Text variant="bodySmall" style={styles.version}>
-        Wine Tracker v1.0.0
+        {t.appVersion}
       </Text>
 
       {/* Sign Out Dialog */}
@@ -144,10 +164,10 @@ export default function ProfileMainScreen({
           onDismiss={() => setSignOutDialogVisible(false)}
           style={styles.dialog}
         >
-          <Dialog.Title style={styles.dialogTitle}>Sign Out</Dialog.Title>
+          <Dialog.Title style={styles.dialogTitle}>{t.signOutConfirm}</Dialog.Title>
           <Dialog.Content>
             <Text style={styles.dialogText}>
-              Are you sure you want to sign out?
+              {t.signOutConfirmMsg}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -155,14 +175,14 @@ export default function ProfileMainScreen({
               onPress={() => setSignOutDialogVisible(false)}
               textColor={colors.textSecondary}
             >
-              Cancel
+              {t.cancel}
             </Button>
             <Button
               onPress={handleSignOut}
               loading={authLoading}
               textColor={colors.primary}
             >
-              Sign Out
+              {t.signOut}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -176,7 +196,7 @@ export default function ProfileMainScreen({
           style={styles.dialog}
         >
           <Dialog.Title style={styles.dialogTitle}>
-            Default Wine Type
+            {t.defaultWineType}
           </Dialog.Title>
           <Dialog.Content>
             {WINE_TYPE_OPTIONS.map((type) => (
@@ -200,7 +220,37 @@ export default function ProfileMainScreen({
                     : undefined
                 }
               >
-                {type}
+                {t.wineTypeLabels[type] ?? type}
+              </Button>
+            ))}
+          </Dialog.Content>
+        </Dialog>
+      </Portal>
+
+      {/* Currency Picker Dialog */}
+      <Portal>
+        <Dialog
+          visible={currencyDialogVisible}
+          onDismiss={() => setCurrencyDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>
+            {t.currency}
+          </Dialog.Title>
+          <Dialog.Content>
+            {CURRENCY_OPTIONS.map((currency) => (
+              <Button
+                key={currency}
+                mode={profile.preferences.currency === currency ? "contained" : "text"}
+                onPress={async () => {
+                  setCurrencyDialogVisible(false);
+                  await updatePreferences({ currency });
+                }}
+                style={styles.wineTypeButton}
+                textColor={profile.preferences.currency === currency ? colors.onPrimary : colors.text}
+                buttonColor={profile.preferences.currency === currency ? colors.primary : undefined}
+              >
+                {currency}
               </Button>
             ))}
           </Dialog.Content>
@@ -230,8 +280,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    textAlign: "right",
   },
   version: {
     color: colors.textSecondary,

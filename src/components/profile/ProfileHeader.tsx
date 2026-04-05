@@ -1,6 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Text } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
 
 interface ProfileHeaderProps {
@@ -23,26 +24,32 @@ export default function ProfileHeader({
   displayName,
   email,
   size = 80,
-}: ProfileHeaderProps) {
+}: ProfileHeaderProps): React.ReactElement {
   return (
-    <View style={styles.container}>
-      <View
-        style={[
-          styles.avatar,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-          },
-        ]}
-      >
-        <Text
-          style={[styles.initials, { fontSize: size * 0.4 }]}
+    <View style={styles.card}>
+      <View style={styles.avatarRow}>
+        <View
+          style={[
+            styles.avatar,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+            },
+          ]}
         >
-          {getInitials(displayName)}
-        </Text>
+          <Text style={[styles.initials, { fontSize: size * 0.4 }]}>
+            {getInitials(displayName)}
+          </Text>
+        </View>
+        <MaterialCommunityIcons
+          name="glass-wine"
+          size={32}
+          color={colors.gold}
+          style={styles.wineIcon}
+        />
       </View>
-      <Text variant="headlineSmall" style={styles.name}>
+      <Text variant="headlineMedium" style={styles.name}>
         {displayName}
       </Text>
       <Text variant="bodyMedium" style={styles.email}>
@@ -53,15 +60,28 @@ export default function ProfileHeader({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    margin: 16,
+    padding: 20,
     alignItems: "center",
-    paddingVertical: 24,
+    borderTopWidth: 3,
+    borderTopColor: colors.primary,
+  },
+  avatarRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 12,
   },
   avatar: {
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+  },
+  wineIcon: {
+    marginStart: 8,
+    marginBottom: 4,
   },
   initials: {
     color: colors.onPrimary,

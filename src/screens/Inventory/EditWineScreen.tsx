@@ -11,18 +11,23 @@ import {
   Button,
   SegmentedButtons,
   Text,
+  HelperText,
   ActivityIndicator,
 } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
 import type { AppWine } from "@/types/index";
 import type { EditWineScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
-const WINE_TYPE_BUTTONS = WINE_TYPES.map((t) => ({ value: t, label: t }));
+const WINE_TYPE_BUTTONS = WINE_TYPES.map((type) => ({
+  value: type,
+  label: t.wineTypeLabels[type] ?? type,
+}));
 
 export default function EditWineScreen({
   route,
@@ -47,6 +52,8 @@ export default function EditWineScreen({
   const [purchasePrice, setPurchasePrice] = useState("");
   const [notes, setNotes] = useState("");
   const [nameError, setNameError] = useState("");
+  const [quantityError, setQuantityError] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
@@ -54,31 +61,36 @@ export default function EditWineScreen({
   const fetchWine = useCallback(async () => {
     if (!householdId) return;
     setLoadingWine(true);
-    const w = await inventoryService.getWine(householdId, wineId);
-    if (w) {
-      const appWine = {
-        ...w,
-        createdAt: w.createdAt?.toDate?.() ?? new Date(),
-        updatedAt: w.updatedAt?.toDate?.() ?? new Date(),
-      } as AppWine;
-      setWine(appWine);
-      setName(appWine.name);
-      setType(appWine.type);
-      setProducer(appWine.producer ?? "");
-      setRegion(appWine.region ?? "");
-      setCountry(appWine.country ?? "");
-      setVintage(appWine.vintage ? String(appWine.vintage) : "");
-      setGrape(appWine.grape ?? "");
-      setNotes(appWine.notes ?? "");
+    try {
+      const w = await inventoryService.getWine(householdId, wineId);
+      if (w) {
+        const appWine = {
+          ...w,
+          createdAt: w.createdAt?.toDate?.() ?? new Date(),
+          updatedAt: w.updatedAt?.toDate?.() ?? new Date(),
+        } as AppWine;
+        setWine(appWine);
+        setName(appWine.name);
+        setType(appWine.type);
+        setProducer(appWine.producer ?? "");
+        setRegion(appWine.region ?? "");
+        setCountry(appWine.country ?? "");
+        setVintage(appWine.vintage ? String(appWine.vintage) : "");
+        setGrape(appWine.grape ?? "");
+        setNotes(appWine.notes ?? "");
+      }
+      if (item) {
+        setQuantity(String(item.quantity));
+        setLocation(item.location ?? "");
+        setPurchasePrice(
+          item.purchasePrice != null ? String(item.purchasePrice) : ""
+        );
+      }
+    } catch (e) {
+      setSubmitError((e as Error).message || t.error);
+    } finally {
+      setLoadingWine(false);
     }
-    if (item) {
-      setQuantity(String(item.quantity));
-      setLocation(item.location ?? "");
-      setPurchasePrice(
-        item.purchasePrice != null ? String(item.purchasePrice) : ""
-      );
-    }
-    setLoadingWine(false);
   }, [householdId, wineId, item]);
 
   useEffect(() => {
@@ -87,39 +99,42 @@ export default function EditWineScreen({
   }, []);
 
   const handleSubmit = async () => {
-    if (!name.trim()) {
-      setNameError("Wine name is required");
-      return;
-    }
+    let valid = true;
+    if (!name.trim()) { setNameError(t.wineNameRequired); valid = false; }
     const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty < 1) return;
-    if (!householdId) return;
+    if (isNaN(qty) || qty < 1) { setQuantityError(t.invalidQuantityMsg); valid = false; }
+    if (!valid || !householdId) return;
 
-    await updateWine(
-      householdId,
-      wineId,
-      {
-        name: name.trim(),
-        type,
-        producer: producer.trim() || undefined,
-        region: region.trim() || undefined,
-        country: country.trim() || undefined,
-        vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
-        grape: grape.trim() || undefined,
-        notes: notes.trim() || undefined,
-      },
-      itemId
-    );
+    setSubmitError("");
+    try {
+      await updateWine(
+        householdId,
+        wineId,
+        {
+          name: name.trim(),
+          type,
+          producer: producer.trim() || undefined,
+          region: region.trim() || undefined,
+          country: country.trim() || undefined,
+          vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
+          grape: grape.trim() || undefined,
+          notes: notes.trim() || undefined,
+        },
+        itemId
+      );
 
-    await updateItem(householdId, itemId, {
-      quantity: qty,
-      location: location.trim() || undefined,
-      purchasePrice: purchasePrice
-        ? parseFloat(purchasePrice) || undefined
-        : undefined,
-    });
+      await updateItem(householdId, itemId, {
+        quantity: qty,
+        location: location.trim() || undefined,
+        purchasePrice: purchasePrice
+          ? parseFloat(purchasePrice) || undefined
+          : undefined,
+      });
 
-    navigation.goBack();
+      navigation.goBack();
+    } catch (e) {
+      setSubmitError((e as Error).message || t.failedToCreateWine);
+    }
   };
 
   if (loadingWine) {
@@ -137,7 +152,7 @@ export default function EditWineScreen({
     >
       <ScrollView contentContainerStyle={styles.scroll}>
         <TextInput
-          label="Wine Name *"
+          label={t.wineName}
           value={name}
           onChangeText={(v) => {
             setName(v);
@@ -145,7 +160,8 @@ export default function EditWineScreen({
           }}
           error={!!nameError}
           style={styles.input}
-          textColor={colors.text}
+          contentStyle={styles.inputContent}
+            textColor={colors.text}
         />
         {nameError ? (
           <Text variant="labelSmall" style={styles.errorText}>
@@ -154,7 +170,7 @@ export default function EditWineScreen({
         ) : null}
 
         <Text variant="labelLarge" style={styles.sectionLabel}>
-          Wine Type
+          {t.wineType}
         </Text>
         <ScrollView
           horizontal
@@ -170,83 +186,101 @@ export default function EditWineScreen({
         </ScrollView>
 
         <TextInput
-          label="Producer"
+          label={t.producer}
           value={producer}
           onChangeText={setProducer}
           style={styles.input}
-          textColor={colors.text}
+          contentStyle={styles.inputContent}
+            textColor={colors.text}
         />
         <View style={styles.row}>
           <TextInput
-            label="Region"
+            label={t.region}
             value={region}
             onChangeText={setRegion}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Country"
+            label={t.country}
             value={country}
             onChangeText={setCountry}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
         <View style={styles.row}>
           <TextInput
-            label="Vintage"
+            label={t.vintage}
             value={vintage}
             onChangeText={setVintage}
             keyboardType="numeric"
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Grape"
+            label={t.grape}
             value={grape}
             onChangeText={setGrape}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
         <View style={styles.row}>
           <TextInput
-            label="Quantity"
+            label={t.quantity}
             value={quantity}
-            onChangeText={setQuantity}
+            onChangeText={(v) => { setQuantity(v); if (quantityError) setQuantityError(""); }}
             keyboardType="numeric"
+            error={!!quantityError}
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
           <View style={styles.gap} />
           <TextInput
-            label="Price"
+            label={t.purchasePrice}
             value={purchasePrice}
             onChangeText={setPurchasePrice}
             keyboardType="decimal-pad"
             style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
             textColor={colors.text}
           />
         </View>
+        <HelperText type="error" visible={!!quantityError}>
+          {quantityError}
+        </HelperText>
         <TextInput
-          label="Storage Location"
+          label={t.storageLocation}
           value={location}
           onChangeText={setLocation}
           style={styles.input}
-          textColor={colors.text}
+          contentStyle={styles.inputContent}
+            textColor={colors.text}
         />
         <TextInput
-          label="Notes"
+          label={t.notes}
           value={notes}
           onChangeText={setNotes}
           multiline
           numberOfLines={3}
           style={styles.input}
-          textColor={colors.text}
+          contentStyle={styles.inputContent}
+            textColor={colors.text}
         />
 
+        {submitError ? (
+          <HelperText type="error" visible>
+            {submitError}
+          </HelperText>
+        ) : null}
         <Button
           mode="contained"
           onPress={handleSubmit}
@@ -255,7 +289,7 @@ export default function EditWineScreen({
           style={styles.submitButton}
           buttonColor={colors.primary}
         >
-          Save Changes
+          {t.saveChanges}
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -281,10 +315,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: colors.card,
   },
+  inputContent: {
+    textAlign: "right",
+  },
   sectionLabel: {
     color: colors.textSecondary,
     marginBottom: 8,
     marginTop: 4,
+    textAlign: "right",
   },
   typeScroll: {
     marginBottom: 16,

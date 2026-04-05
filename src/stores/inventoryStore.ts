@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as inventoryService from "@services/inventory";
-import type { AppInventoryItem, AppWine } from "@/types/index";
+import * as diaryService from "@services/diary";
+import type { AppInventoryItem, AppWine, WineType, AppDiaryEntry } from "@/types/index";
 
 interface InventoryState {
   items: AppInventoryItem[];
@@ -18,7 +19,14 @@ interface InventoryActions {
   updateItem: (
     householdId: string,
     itemId: string,
-    data: Partial<Pick<AppInventoryItem, "quantity" | "location" | "purchasePrice">>
+    data: Partial<Pick<AppInventoryItem, "quantity" | "location" | "purchasePrice" | "status">>
+  ) => Promise<void>;
+  openBottle: (
+    householdId: string,
+    itemId: string,
+    wineId: string,
+    wineName: string,
+    wineType: WineType
   ) => Promise<void>;
   updateWine: (
     householdId: string,
@@ -33,6 +41,7 @@ interface InventoryActions {
   ) => Promise<void>;
   deleteItem: (householdId: string, itemId: string) => Promise<void>;
   clearError: () => void;
+  reset: () => void;
 }
 
 export type InventoryStore = InventoryState & InventoryActions;
@@ -123,5 +132,37 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     }
   },
 
+  openBottle: async (householdId, itemId, wineId, wineName, wineType) => {
+    set({ error: null });
+    try {
+      const item = get().items.find((i) => i.id === itemId);
+      const qty = item?.quantity ?? 1;
+      const entryId = diaryService.generateEntryId(householdId);
+
+      const deleted = await inventoryService.openBottle(
+        householdId,
+        itemId,
+        qty,
+        { entryId, wineId, wineName, wineType }
+      );
+
+      if (deleted) {
+        set((state) => ({
+          items: state.items.filter((i) => i.id !== itemId),
+        }));
+      } else {
+        set((state) => ({
+          items: state.items.map((i) =>
+            i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i
+          ),
+        }));
+      }
+    } catch (e) {
+      set({ error: (e as Error).message });
+      throw e;
+    }
+  },
+
   clearError: () => set({ error: null }),
+  reset: () => set({ items: [], loading: false, error: null }),
 }));

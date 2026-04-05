@@ -19,10 +19,11 @@ interface DiaryActions {
   updateEntry: (
     householdId: string,
     entryId: string,
-    data: Partial<Pick<AppDiaryEntry, "rating" | "notes" | "imageUrls">>
+    data: Partial<Pick<AppDiaryEntry, "rating" | "notes" | "imageUrls" | "wantToOrder">>
   ) => Promise<void>;
   deleteEntry: (householdId: string, entryId: string) => Promise<void>;
   clearError: () => void;
+  reset: () => void;
 }
 
 export type DiaryStore = DiaryState & DiaryActions;
@@ -92,4 +93,5 @@ export const useDiaryStore = create<DiaryStore>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  reset: () => set({ entries: [], loading: false, error: null }),
 }));

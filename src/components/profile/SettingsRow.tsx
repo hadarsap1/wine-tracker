@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, View, StyleSheet } from "react-native";
 import { Text } from "react-native-paper";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
 
 interface SettingsRowProps {
@@ -18,7 +18,7 @@ export default function SettingsRow({
   value,
   onPress,
   showChevron = true,
-}: SettingsRowProps) {
+}: SettingsRowProps): React.ReactElement {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -28,29 +28,36 @@ export default function SettingsRow({
       onPress={onPress}
       disabled={!onPress}
     >
-      <MaterialCommunityIcons
-        name={icon}
-        size={22}
-        color={colors.textSecondary}
-        style={styles.icon}
-      />
-      <Text variant="bodyLarge" style={styles.label}>
+      {/* In RTL row: first child = rightmost (right side) */}
+      <View style={styles.iconContainer}>
+        <MaterialCommunityIcons
+          name={icon as any}
+          size={22}
+          color={colors.textSecondary}
+        />
+      </View>
+
+      {/* flex:1 fills remaining space */}
+      <Text variant="bodyLarge" style={styles.label} numberOfLines={1}>
         {label}
       </Text>
-      <View style={styles.right}>
-        {value ? (
-          <Text variant="bodyMedium" style={styles.value}>
-            {value}
-          </Text>
-        ) : null}
-        {showChevron && onPress ? (
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={22}
-            color={colors.textSecondary}
-          />
-        ) : null}
-      </View>
+
+      {/* Value sits directly between label and chevron — no inner row to flip */}
+      {value ? (
+        <Text variant="bodyMedium" style={styles.value} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+
+      {/* In RTL row: last child = leftmost (left side) */}
+      {showChevron && onPress ? (
+        <MaterialCommunityIcons
+          name="chevron-left"
+          size={22}
+          color={colors.textSecondary}
+          style={styles.chevron}
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -63,25 +70,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     minHeight: 56,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderRadius: 10,
+    marginBottom: 2,
   },
   pressed: {
     opacity: 0.7,
   },
-  icon: {
-    marginRight: 12,
+  iconContainer: {
+    backgroundColor: colors.border,
+    borderRadius: 8,
+    padding: 6,
+    marginEnd: 12,
   },
   label: {
     flex: 1,
     color: colors.text,
-  },
-  right: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+    textAlign: "right",
   },
   value: {
     color: colors.textSecondary,
+    marginStart: 12,
+    maxWidth: 140,
+    textAlign: "left",
+  },
+  chevron: {
+    marginStart: 6,
   },
 });

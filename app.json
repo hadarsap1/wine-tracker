@@ -3,6 +3,9 @@
     "name": "Wine Tracker",
     "slug": "wine-tracker",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,13 +18,16 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.winetracker.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Wine Tracker needs camera access to scan wine labels and receipts.",
-        "NSPhotoLibraryUsageDescription": "Wine Tracker needs photo library access to import wine label and receipt images."
+        "NSPhotoLibraryUsageDescription": "Wine Tracker needs photo library access to import wine label and receipt images.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.winetracker.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -29,17 +35,33 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Wine Tracker",
+      "shortName": "Wine Tracker",
+      "description": "Track your wine collection and tasting diary",
+      "themeColor": "#1a1a2e",
+      "backgroundColor": "#1a1a2e",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-camera",
       "expo-image-picker",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c19a45c2-43f4-4a0e-bfd4-7902c5d95eb3"
+      }
+    },
+    "owner": "hadarsap1"
   }
 }

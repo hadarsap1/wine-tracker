@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { ScrollView, Alert, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet } from "react-native";
 import { Text, TextInput, Button } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useDiaryStore } from "@stores/diaryStore";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import { uploadImage, deleteImage, diaryImagePath } from "@services/storage";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { RatingInput, ImagePickerSection } from "@components/diary";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { EditEntryScreenProps } from "@navigation/types";
@@ -17,11 +19,12 @@ export default function EditEntryScreen({
   const { entryId } = route.params;
   const profile = useAuthStore((s) => s.profile);
   const { entries, updateEntry } = useDiaryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
   const householdId = profile?.householdIds?.[0];
 
   const entry = entries.find((e) => e.id === entryId);
 
-  const [rating, setRating] = useState<number>(entry?.rating ?? 0);
+  const [rating, setRating] = useState<number | null>(entry?.rating ?? null);
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [images, setImages] = useState<string[]>(entry?.imageUrls ?? []);
   const [saving, setSaving] = useState(false);
@@ -33,7 +36,7 @@ export default function EditEntryScreen({
     return (
       <ScrollView style={styles.container}>
         <Text variant="bodyLarge" style={styles.notFound}>
-          Entry not found
+          {t.entryNotFound}
         </Text>
       </ScrollView>
     );
@@ -49,8 +52,10 @@ export default function EditEntryScreen({
 
   const handleSave = async () => {
     if (!householdId) return;
-    if (rating < 1) {
-      Alert.alert("Missing rating", "Please rate the wine (1-5 stars).");
+    // rating can stay null for "opened bottle" entries; only enforce if user
+    // has started changing it (i.e. touched at least 1 star)
+    if (rating !== null && (rating as number) < 1) {
+      showSnackbar(t.pleaseRateWine, "error");
       return;
     }
 
@@ -78,14 +83,14 @@ export default function EditEntryScreen({
       );
 
       await updateEntry(householdId, entryId, {
-        rating: rating as Rating,
+        rating: (rating as Rating | null),
         notes: notes.trim() || undefined,
         imageUrls: finalUrls,
       });
 
       navigation.goBack();
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setSaving(false);
     }
@@ -99,7 +104,7 @@ export default function EditEntryScreen({
     >
       {/* Wine (read-only) */}
       <Text variant="labelLarge" style={styles.label}>
-        Wine
+        {t.wine}
       </Text>
       <Text variant="bodyLarge" style={styles.wineNameText}>
         {entry.wineName}
@@ -108,13 +113,18 @@ export default function EditEntryScreen({
 
       {/* Rating */}
       <Text variant="labelLarge" style={styles.label}>
-        Rating
+        {t.rating}
       </Text>
-      <RatingInput value={rating} onChange={setRating} />
+      <RatingInput value={rating} onChange={(r) => setRating(r)} />
+      {rating === null && (
+        <Text variant="labelSmall" style={styles.unratedHint}>
+          {t.tapToRate}
+        </Text>
+      )}
 
       {/* Notes */}
       <Text variant="labelLarge" style={styles.label}>
-        Notes
+        {t.notes}
       </Text>
       <TextInput
         value={notes}
@@ -122,8 +132,9 @@ export default function EditEntryScreen({
         mode="outlined"
         multiline
         numberOfLines={4}
-        placeholder="How did it taste? Aromas, flavors, pairings..."
+        placeholder={t.notesPlaceholder}
         style={styles.notesInput}
+        contentStyle={styles.notesContent}
         textColor={colors.text}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
@@ -147,7 +158,7 @@ export default function EditEntryScreen({
         buttonColor={colors.primary}
         textColor={colors.onPrimary}
       >
-        Save Changes
+        {t.saveChanges}
       </Button>
     </ScrollView>
   );
@@ -171,16 +182,27 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: 16,
     marginBottom: 8,
+    textAlign: "right",
   },
   wineNameText: {
     color: colors.text,
     marginBottom: 8,
+    textAlign: "right",
   },
   notesInput: {
     backgroundColor: colors.card,
     minHeight: 100,
   },
+  notesContent: {
+    textAlign: "right",
+  },
   saveButton: {
     marginTop: 24,
+  },
+  unratedHint: {
+    color: colors.primary,
+    marginTop: 4,
+    fontStyle: "italic",
+    textAlign: "right",
   },
 });

@@ -1,112 +1,58 @@
-import React, { useState } from "react";
-import {
-  View,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
-import { Button, Text, TextInput, HelperText } from "react-native-paper";
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import { Button, Text } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
 import { colors } from "@config/theme";
-import type { LoginScreenProps } from "@navigation/types";
+import { t } from "@i18n/index";
 
-export default function LoginScreen({ navigation }: LoginScreenProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const { signIn, loading, error, clearError } = useAuthStore();
-
-  const handleLogin = async () => {
-    try {
-      await signIn(email.trim(), password);
-    } catch {
-      // error is set in the store
-    }
-  };
-
-  const handleEmailChange = (text: string) => {
-    if (error) clearError();
-    setEmail(text);
-  };
-
-  const handlePasswordChange = (text: string) => {
-    if (error) clearError();
-    setPassword(text);
-  };
+export default function LoginScreen() {
+  const { signInWithGoogle, loading, error } = useAuthStore();
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <Text variant="headlineLarge" style={styles.title}>
-            Wine Tracker
-          </Text>
-          <Text variant="bodyLarge" style={styles.subtitle}>
-            Sign in to your account
-          </Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.iconContainer}>
+          <MaterialCommunityIcons
+            name="glass-wine"
+            size={64}
+            color={colors.gold}
+          />
         </View>
+        <Text variant="headlineLarge" style={styles.title}>
+          {t.signInTitle}
+        </Text>
+        <Text variant="bodyLarge" style={styles.subtitle}>
+          {t.signInSubtitle}
+        </Text>
+      </View>
 
-        <View style={styles.form}>
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={handleEmailChange}
-            mode="outlined"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            left={<TextInput.Icon icon="email-outline" />}
-            style={styles.input}
-          />
-
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={handlePasswordChange}
-            mode="outlined"
-            secureTextEntry={!showPassword}
-            left={<TextInput.Icon icon="lock-outline" />}
-            right={
-              <TextInput.Icon
-                icon={showPassword ? "eye-off" : "eye"}
-                onPress={() => setShowPassword(!showPassword)}
-              />
-            }
-            style={styles.input}
-          />
-
-          <HelperText type="error" visible={!!error}>
+      <View style={styles.formCard}>
+        {error ? (
+          <Text variant="bodySmall" style={styles.errorText}>
             {error}
-          </HelperText>
+          </Text>
+        ) : null}
 
-          <Button
-            mode="contained"
-            onPress={handleLogin}
-            loading={loading}
-            disabled={loading || !email || !password}
-            style={styles.button}
-            contentStyle={styles.buttonContent}
-          >
-            Sign In
-          </Button>
-
-          <Button
-            mode="text"
-            onPress={() => navigation.navigate("SignUp")}
-            style={styles.linkButton}
-          >
-            Don't have an account? Sign Up
-          </Button>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <Button
+          mode="contained"
+          onPress={async () => {
+            try {
+              await signInWithGoogle();
+            } catch {}
+          }}
+          loading={loading}
+          disabled={loading}
+          icon="google"
+          style={styles.googleButton}
+          buttonColor={colors.primary}
+          textColor={colors.onPrimary}
+          contentStyle={styles.buttonContent}
+        >
+          {t.signInWithGoogle}
+        </Button>
+      </View>
+    </View>
   );
 }
 
@@ -114,38 +60,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  scroll: {
-    flexGrow: 1,
     justifyContent: "center",
     padding: 24,
   },
   header: {
     alignItems: "center",
-    marginBottom: 48,
+    marginBottom: 40,
+  },
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.gold + "40",
   },
   title: {
-    color: colors.primary,
+    color: colors.gold,
     fontWeight: "bold",
   },
   subtitle: {
     color: colors.textSecondary,
     marginTop: 8,
+    textAlign: "right",
   },
-  form: {
-    width: "100%",
+  formCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
   },
-  input: {
-    marginBottom: 8,
+  errorText: {
+    color: colors.error,
+    textAlign: "center",
+    marginBottom: 16,
   },
-  button: {
-    marginTop: 16,
-    borderRadius: 8,
+  googleButton: {
+    borderRadius: 12,
   },
   buttonContent: {
     paddingVertical: 6,
-  },
-  linkButton: {
-    marginTop: 12,
   },
 });

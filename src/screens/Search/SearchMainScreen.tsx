@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
-import { Searchbar, Chip, Text } from "react-native-paper";
+import { Searchbar, Chip, Text, ActivityIndicator } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { SearchResultRow } from "@components/search";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
 import type { SearchMainScreenProps } from "@navigation/types";
 import type { AppInventoryItem } from "@/types/index";
@@ -28,6 +29,12 @@ export default function SearchMainScreen({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => setDebouncedQuery(text), 300);
   }, []);
+
+  useEffect(() => {
+    if (householdId && items.length === 0) {
+      loadItems(householdId);
+    }
+  }, [householdId]);
 
   const handleRefresh = useCallback(() => {
     if (householdId) loadItems(householdId);
@@ -68,10 +75,18 @@ export default function SearchMainScreen({
     [handlePress]
   );
 
+  if (loading && items.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Searchbar
-        placeholder="Search wines..."
+        placeholder={t.searchWines}
         onChangeText={handleQueryChange}
         value={query}
         style={styles.searchBar}
@@ -102,7 +117,7 @@ export default function SearchMainScreen({
                 selectedType === type && styles.chipTextSelected,
               ]}
             >
-              {type}
+              {t.wineTypeLabels[type] ?? type}
             </Chip>
           )}
         />
@@ -121,8 +136,8 @@ export default function SearchMainScreen({
           <View style={styles.empty}>
             <Text variant="bodyLarge" style={styles.emptyText}>
               {items.length === 0
-                ? "No wines in your cellar yet"
-                : "No wines match your search"}
+                ? t.noWinesYet
+                : t.noWinesMatch}
             </Text>
           </View>
         }
@@ -134,6 +149,12 @@ export default function SearchMainScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: colors.background,
   },
   searchBar: {
@@ -175,5 +196,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textSecondary,
+    textAlign: "right",
   },
 });
