@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, FlatList, StyleSheet } from "react-native";
-import { FAB, Searchbar, ActivityIndicator, SegmentedButtons } from "react-native-paper";
+import { View, FlatList, StyleSheet, ScrollView } from "react-native";
+import { FAB, Searchbar, ActivityIndicator, SegmentedButtons, Chip } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { colors } from "@config/theme";
@@ -9,6 +9,7 @@ import EmptyState from "@components/common/EmptyState";
 import InventoryCard from "@components/inventory/InventoryCard";
 import type { InventoryListScreenProps } from "@navigation/types";
 import type { AppInventoryItem, InventoryStatus } from "@/types/index";
+import { WineType } from "@/types/index";
 
 export default function InventoryListScreen({
   navigation,
@@ -17,6 +18,7 @@ export default function InventoryListScreen({
   const { items, loading, loadItems } = useInventoryStore();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<InventoryStatus>("in_stock");
+  const [wineTypeFilter, setWineTypeFilter] = useState<WineType | null>(null);
 
   const householdId = profile?.householdIds?.[0];
 
@@ -27,11 +29,14 @@ export default function InventoryListScreen({
   }, [householdId, loadItems]);
 
   const tabItems = items.filter((item) => (item.status ?? "in_stock") === tab);
+  const typeFilteredItems = wineTypeFilter
+    ? tabItems.filter((item) => item.wineType === wineTypeFilter)
+    : tabItems;
   const filteredItems = search
-    ? tabItems.filter((item) =>
+    ? typeFilteredItems.filter((item) =>
         item.wineName.toLowerCase().includes(search.toLowerCase())
       )
-    : tabItems;
+    : typeFilteredItems;
 
   const inStockCount = items.filter((i) => (i.status ?? "in_stock") === "in_stock").length;
   const onTheWayCount = items.filter((i) => (i.status ?? "in_stock") === "on_the_way").length;
@@ -84,6 +89,34 @@ export default function InventoryListScreen({
         placeholderTextColor={colors.textSecondary}
         editable={!loading || items.length > 0}
       />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterContent}
+      >
+        <Chip
+          selected={wineTypeFilter === null}
+          onPress={() => setWineTypeFilter(null)}
+          style={styles.filterChip}
+          selectedColor={colors.primary}
+          compact
+        >
+          הכל
+        </Chip>
+        {Object.values(WineType).map((type) => (
+          <Chip
+            key={type}
+            selected={wineTypeFilter === type}
+            onPress={() => setWineTypeFilter(wineTypeFilter === type ? null : type)}
+            style={styles.filterChip}
+            selectedColor={colors.primary}
+            compact
+          >
+            {t.wineTypeLabels[type]}
+          </Chip>
+        ))}
+      </ScrollView>
       <FlatList
         data={filteredItems}
         renderItem={renderItem}
@@ -146,6 +179,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: colors.card,
     elevation: 0,
+  },
+  filterScroll: {
+    marginBottom: 4,
+  },
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: "row",
+  },
+  filterChip: {
+    backgroundColor: colors.card,
   },
   searchInput: {
     color: colors.text,

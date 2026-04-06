@@ -6,6 +6,10 @@ import {
 } from "firebase/storage";
 import { storage } from "@config/firebase";
 
+export function wineLabelPath(householdId: string, wineId: string): string {
+  return `households/${householdId}/wines/${wineId}/label.jpg`;
+}
+
 export function diaryImagePath(
   householdId: string,
   entryId: string,

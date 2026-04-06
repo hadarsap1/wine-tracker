@@ -19,6 +19,7 @@ export type SelectedWine = {
 
 export type AuthStackParamList = {
   Login: undefined;
+  SignUp: undefined;
 };
 
 export type InventoryStackParamList = {
@@ -72,6 +73,7 @@ export type RootStackParamList = {
 // ─── Screen Props ───────────────────────────────────────────────────────────
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, "Login">;
+export type SignUpScreenProps = NativeStackScreenProps<AuthStackParamList, "SignUp">;
 
 export type InventoryListScreenProps = CompositeScreenProps<
   NativeStackScreenProps<InventoryStackParamList, "InventoryList">,

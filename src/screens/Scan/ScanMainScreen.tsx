@@ -50,12 +50,12 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
 
   const takePhoto = async () => {
     if (Platform.OS === "web") {
-      Alert.alert(t.scanUnavailable, t.cameraNotAvailableWeb ?? "Camera capture is not supported in the browser. Please upload an image instead.");
+      showSnackbar(t.cameraNotAvailableWeb ?? "Camera capture is not supported in the browser. Please upload an image instead.", "info");
       return;
     }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(t.permissionDenied, t.cameraPermissionMsg);
+      showSnackbar(t.cameraPermissionMsg, "error");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -71,7 +71,7 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
     if (Platform.OS !== "web") {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(t.permissionDenied, t.galleryPermissionMsg);
+        showSnackbar(t.galleryPermissionMsg, "error");
         return;
       }
     }

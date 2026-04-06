@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
   Pressable,
 } from "react-native";
 import { TextInput, Button, SegmentedButtons, Text } from "react-native-paper";
@@ -14,6 +13,8 @@ import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import * as vivinoService from "@services/vivino";
+import * as storageService from "@services/storage";
+import * as inventoryService from "@services/inventory";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
@@ -63,6 +64,25 @@ export default function ScanReviewScreen({
   const vivinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const householdId = profile?.householdIds?.[0];
+
+  // What fields Vivino can supply that are currently empty
+  const vivinoCanFill =
+    vivinoData &&
+    ((!producer && vivinoData.producerName) ||
+      (!region && vivinoData.region) ||
+      (!country && vivinoData.country));
+
+  const handleVivinoAutoFill = () => {
+    if (!vivinoData) return;
+    if (!producer && vivinoData.producerName) setProducer(vivinoData.producerName);
+    if (!region && vivinoData.region) setRegion(vivinoData.region);
+    if (!country && vivinoData.country) setCountry(vivinoData.country);
+    if (vivinoData.wineType) {
+      const mapped = vivinoData.wineType as WineType;
+      if (Object.values(WineType).includes(mapped)) setType(mapped);
+    }
+    showSnackbar(t.vivinoAutoFilled, "success");
+  };
 
   // Re-fetch Vivino whenever name, producer, or vintage changes (debounced 800ms)
   React.useEffect(() => {
@@ -118,7 +138,7 @@ export default function ScanReviewScreen({
 
     setSaving(true);
     try {
-      await addWine(
+      const wineId = await addWine(
         householdId,
         {
           name: name.trim(),
@@ -139,6 +159,16 @@ export default function ScanReviewScreen({
             : undefined,
         }
       );
+      // Upload scanned label image to Storage (non-blocking — best-effort)
+      if (imageUri && !imageUri.startsWith("https://")) {
+        try {
+          const path = storageService.wineLabelPath(householdId, wineId);
+          const downloadUrl = await storageService.uploadImage(imageUri, path);
+          await inventoryService.updateWine(householdId, wineId, { imageUrl: downloadUrl });
+        } catch {
+          // Image upload is best-effort; wine was saved successfully
+        }
+      }
       showSnackbar(t.addedToCellar, "success");
       navigation.popToTop();
     } catch (e) {
@@ -178,6 +208,18 @@ export default function ScanReviewScreen({
               <Text variant="labelSmall" style={styles.vivinoMatchName}>
                 {t.vivinoMatched}: {vivinoData.wineName}
               </Text>
+            )}
+            {vivinoCanFill && (
+              <Button
+                mode="outlined"
+                onPress={handleVivinoAutoFill}
+                icon="auto-fix"
+                textColor={colors.primary}
+                style={styles.autoFillBtn}
+                compact
+              >
+                {t.autoFillFromVivino}
+              </Button>
             )}
           </View>
         )}
@@ -347,11 +389,15 @@ const styles = StyleSheet.create({
   },
   vivinoRow: {
     marginBottom: 12,
+    gap: 6,
   },
   vivinoMatchName: {
     color: colors.textSecondary,
-    marginTop: 4,
     fontStyle: "italic",
+  },
+  autoFillBtn: {
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
   },
   confidenceBanner: {
     borderRadius: 8,

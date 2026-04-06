@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet, Image } from "react-native";
 import {
   Text,
   Button,
@@ -8,7 +8,9 @@ import {
   Portal,
   ActivityIndicator,
   Divider,
+  TextInput,
 } from "react-native-paper";
+import { Timestamp } from "firebase/firestore";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
@@ -41,6 +43,10 @@ export default function WineDetailScreen({
   const [openBottleDialogVisible, setOpenBottleDialogVisible] = useState(false);
   const [arrivedDialogVisible, setArrivedDialogVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [manualVivinoVisible, setManualVivinoVisible] = useState(false);
+  const [manualScore, setManualScore] = useState("");
+  const [manualRatings, setManualRatings] = useState("");
+  const [savingVivino, setSavingVivino] = useState(false);
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
@@ -136,6 +142,33 @@ export default function WineDetailScreen({
     }
   };
 
+  const handleSaveManualVivino = async () => {
+    const score = parseFloat(manualScore);
+    if (isNaN(score) || score < 1 || score > 5) {
+      showSnackbar(t.manualVivinoInvalidScore, "error");
+      return;
+    }
+    if (!householdId) return;
+    setSavingVivino(true);
+    try {
+      const data: VivinoData = {
+        score,
+        ratings: manualRatings ? parseInt(manualRatings, 10) || 0 : 0,
+        fetchedAt: Timestamp.now(),
+      };
+      await inventoryService.updateWine(householdId, wineId, { vivinoData: data });
+      setVivinoData(data);
+      setManualVivinoVisible(false);
+      setManualScore("");
+      setManualRatings("");
+      showSnackbar(t.manualVivinoSaved, "success");
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setSavingVivino(false);
+    }
+  };
+
   if (loadingWine || !item) {
     return (
       <View style={styles.loadingContainer}>
@@ -152,6 +185,14 @@ export default function WineDetailScreen({
         </Text>
         <WineTypeChip type={item.wineType} />
       </View>
+
+      {wine?.imageUrl ? (
+        <Image
+          source={{ uri: wine.imageUrl }}
+          style={styles.labelImage}
+          resizeMode="contain"
+        />
+      ) : null}
 
       <Divider style={styles.divider} />
 
@@ -197,6 +238,18 @@ export default function WineDetailScreen({
       {(loadingVivino || vivinoData !== undefined) && (
         <View style={styles.vivinoSection}>
           <VivinoBadge data={vivinoData} loading={loadingVivino} />
+          {vivinoData === null && !loadingVivino && (
+            <Button
+              mode="outlined"
+              onPress={() => setManualVivinoVisible(true)}
+              icon="star-plus-outline"
+              textColor={colors.primary}
+              style={styles.manualVivinoBtn}
+              compact
+            >
+              {t.addVivinoManually}
+            </Button>
+          )}
         </View>
       )}
 
@@ -324,6 +377,48 @@ export default function WineDetailScreen({
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <Portal>
+        <Dialog
+          visible={manualVivinoVisible}
+          onDismiss={() => setManualVivinoVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.manualVivinoTitle}</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label={t.manualVivinoScore}
+              value={manualScore}
+              onChangeText={setManualScore}
+              keyboardType="decimal-pad"
+              style={styles.dialogInput}
+              contentStyle={styles.dialogInputContent}
+              textColor={colors.text}
+              autoFocus
+            />
+            <TextInput
+              label={t.manualVivinoRatings}
+              value={manualRatings}
+              onChangeText={setManualRatings}
+              keyboardType="numeric"
+              style={styles.dialogInput}
+              contentStyle={styles.dialogInputContent}
+              textColor={colors.text}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setManualVivinoVisible(false)} textColor={colors.textSecondary}>{t.cancel}</Button>
+            <Button
+              onPress={handleSaveManualVivino}
+              loading={savingVivino}
+              disabled={savingVivino || !manualScore.trim()}
+              textColor={colors.primary}
+            >
+              {t.save}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -414,8 +509,26 @@ const styles = StyleSheet.create({
     minWidth: 40,
     textAlign: "center",
   },
+  labelImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: 8,
+    marginTop: 12,
+  },
   vivinoSection: {
     marginBottom: 20,
+  },
+  manualVivinoBtn: {
+    marginTop: 8,
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
+  },
+  dialogInput: {
+    backgroundColor: colors.background,
+    marginBottom: 8,
+  },
+  dialogInputContent: {
+    textAlign: "right",
   },
   detailsSection: {
     gap: 4,

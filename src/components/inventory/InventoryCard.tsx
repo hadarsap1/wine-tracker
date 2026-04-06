@@ -21,6 +21,11 @@ export default function InventoryCard({ item, onPress }: InventoryCardProps): Re
             <Text variant="titleMedium" style={styles.name} numberOfLines={1}>
               {item.wineName}
             </Text>
+            {item.producerName ? (
+              <Text variant="bodySmall" style={styles.producer} numberOfLines={1}>
+                {item.producerName}
+              </Text>
+            ) : null}
             <WineTypeChip type={item.wineType} compact />
             {item.location ? (
               <View style={styles.locationRow}>
@@ -81,6 +86,11 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     textAlign: "right",
+  },
+  producer: {
+    color: colors.textSecondary,
+    textAlign: "right",
+    marginTop: -2,
   },
   locationRow: {
     flexDirection: "row",

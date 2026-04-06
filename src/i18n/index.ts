@@ -210,6 +210,15 @@ export const t = {
   vivinoRating: "דירוג Vivino",
   vivinoFetching: "מחפש ב-Vivino...",
   vivinoNotFound: "לא נמצא ב-Vivino",
+  autoFillFromVivino: "מלא פרטים מ-Vivino",
+  vivinoAutoFilled: "פרטים מולאו מ-Vivino",
+  vivinoFetchingBatch: "טוען דירוגי Vivino...",
+  addVivinoManually: "הוסף דירוג ידנית",
+  manualVivinoTitle: "דירוג Vivino ידני",
+  manualVivinoScore: "ציון (1.0 - 5.0)",
+  manualVivinoRatings: "מספר מדרגים (אופציונלי)",
+  manualVivinoInvalidScore: "ציון לא תקין. הזן מספר בין 1.0 ל-5.0",
+  manualVivinoSaved: "הדירוג נשמר",
 
   // ImagePicker
   addPhoto: "הוסף תמונה",

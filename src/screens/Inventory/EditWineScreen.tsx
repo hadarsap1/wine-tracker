@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -17,10 +17,13 @@ import {
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
+import * as vivinoService from "@services/vivino";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
-import { WineType } from "@/types/index";
+import { WineType, type VivinoData } from "@/types/index";
 import type { AppWine } from "@/types/index";
+import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { EditWineScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
@@ -36,6 +39,8 @@ export default function EditWineScreen({
   const { wineId, itemId } = route.params;
   const profile = useAuthStore((s) => s.profile);
   const { items, updateWine, updateItem, loading } = useInventoryStore();
+
+  const showSnackbar = useSnackbarStore((s) => s.show);
 
   const [wine, setWine] = useState<AppWine | null>(null);
   const [loadingWine, setLoadingWine] = useState(true);
@@ -54,6 +59,12 @@ export default function EditWineScreen({
   const [nameError, setNameError] = useState("");
   const [quantityError, setQuantityError] = useState("");
   const [submitError, setSubmitError] = useState("");
+
+  // Vivino
+  const [vivinoData, setVivinoData] = useState<VivinoData | null | undefined>(undefined);
+  const [loadingVivino, setLoadingVivino] = useState(false);
+  const vivinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialFetchDone = useRef(false);
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
@@ -78,6 +89,10 @@ export default function EditWineScreen({
         setVintage(appWine.vintage ? String(appWine.vintage) : "");
         setGrape(appWine.grape ?? "");
         setNotes(appWine.notes ?? "");
+        // Use existing Vivino data from the wine doc as the initial badge state
+        if (appWine.vivinoData) {
+          setVivinoData(appWine.vivinoData as VivinoData);
+        }
       }
       if (item) {
         setQuantity(String(item.quantity));
@@ -86,6 +101,7 @@ export default function EditWineScreen({
           item.purchasePrice != null ? String(item.purchasePrice) : ""
         );
       }
+      initialFetchDone.current = true;
     } catch (e) {
       setSubmitError((e as Error).message || t.error);
     } finally {
@@ -97,6 +113,55 @@ export default function EditWineScreen({
     fetchWine();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live Vivino fetch — debounced when name/producer/vintage changes after initial load
+  useEffect(() => {
+    if (!initialFetchDone.current) return; // skip until wine is loaded
+    const trimmed = name.trim();
+    setVivinoData(undefined);
+    setLoadingVivino(false);
+    if (trimmed.length < 3) return;
+
+    let cancelled = false;
+    if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+    vivinoDebounceRef.current = setTimeout(() => {
+      const query = [producer.trim(), trimmed].filter(Boolean).join(" ").trim();
+      const vintageYear = vintage ? parseInt(vintage, 10) || undefined : undefined;
+      setLoadingVivino(true);
+      vivinoService
+        .fetchVivinoData(query, vintageYear)
+        .then((data) => {
+          if (cancelled) return;
+          setVivinoData(data ?? null);
+          setLoadingVivino(false);
+        })
+        .catch(() => {
+          if (!cancelled) { setVivinoData(null); setLoadingVivino(false); }
+        });
+    }, 800);
+    return () => {
+      cancelled = true;
+      if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+    };
+  }, [name, producer, vintage]);
+
+  const vivinoCanFill =
+    vivinoData &&
+    ((!producer && vivinoData.producerName) ||
+      (!region && vivinoData.region) ||
+      (!country && vivinoData.country));
+
+  const handleVivinoAutoFill = () => {
+    if (!vivinoData) return;
+    if (!producer && vivinoData.producerName) setProducer(vivinoData.producerName);
+    if (!region && vivinoData.region) setRegion(vivinoData.region);
+    if (!country && vivinoData.country) setCountry(vivinoData.country);
+    if (vivinoData.wineType) {
+      const mapped = vivinoData.wineType as WineType;
+      if (Object.values(WineType).includes(mapped)) setType(mapped);
+    }
+    showSnackbar(t.vivinoAutoFilled, "success");
+  };
 
   const handleSubmit = async () => {
     let valid = true;
@@ -168,6 +233,25 @@ export default function EditWineScreen({
             {nameError}
           </Text>
         ) : null}
+
+        {/* Vivino live badge */}
+        {(loadingVivino || vivinoData !== undefined) && (
+          <View style={styles.vivinoRow}>
+            <VivinoBadge data={vivinoData} loading={loadingVivino} />
+            {vivinoCanFill && (
+              <Button
+                mode="outlined"
+                onPress={handleVivinoAutoFill}
+                icon="auto-fix"
+                textColor={colors.primary}
+                style={styles.autoFillBtn}
+                compact
+              >
+                {t.autoFillFromVivino}
+              </Button>
+            )}
+          </View>
+        )}
 
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {t.wineType}
@@ -341,6 +425,14 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginBottom: 8,
     marginLeft: 4,
+  },
+  vivinoRow: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  autoFillBtn: {
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
   },
   submitButton: {
     marginTop: 16,

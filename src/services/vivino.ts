@@ -9,6 +9,10 @@ interface VivinoProxyResponse {
   imageUrl?: string;
   wineName?: string;
   wineUrl?: string;
+  wineType?: string;
+  producerName?: string;
+  region?: string;
+  country?: string;
 }
 
 const vivinoProxyFn = httpsCallable<
@@ -35,6 +39,10 @@ export async function fetchVivinoData(
       imageUrl: data.imageUrl,
       wineName: data.wineName,
       wineUrl: data.wineUrl,
+      wineType: data.wineType,
+      producerName: data.producerName,
+      region: data.region,
+      country: data.country,
       fetchedAt: Timestamp.now(),
     };
   } catch {

@@ -77,6 +77,12 @@ export interface VivinoData {
   imageUrl?: string;
   wineName?: string;
   wineUrl?: string;
+  /** WineType enum value extracted from Vivino (e.g. "Red", "White") */
+  wineType?: string;
+  /** Producer/winery name from Vivino */
+  producerName?: string;
+  region?: string;
+  country?: string;
   fetchedAt: Timestamp;
 }
 
@@ -133,6 +139,7 @@ export interface InventoryItem extends FirestoreDoc {
   wineId: string;
   wineName: string;
   wineType: WineType;
+  producerName?: string;
   quantity: number;
   status: InventoryStatus;
   location?: string;

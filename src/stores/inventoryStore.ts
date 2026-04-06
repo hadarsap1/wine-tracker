@@ -15,7 +15,7 @@ interface InventoryActions {
     householdId: string,
     wine: inventoryService.WineFormData,
     inventory: inventoryService.InventoryFormData
-  ) => Promise<void>;
+  ) => Promise<string>;
   updateItem: (
     householdId: string,
     itemId: string,
@@ -70,12 +70,13 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   addWine: async (householdId, wine, inventory) => {
     set({ loading: true, error: null });
     try {
-      await inventoryService.createWineWithInventory(
+      const { wineId } = await inventoryService.createWineWithInventory(
         householdId,
         wine,
         inventory
       );
       await get().loadItems(householdId);
+      return wineId;
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
       throw e;

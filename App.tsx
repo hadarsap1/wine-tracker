@@ -63,7 +63,7 @@ export default function App() {
             "material-community",
             `url(${fontUrl}) format('truetype')`
           );
-          document.fonts.add(face);
+          (document.fonts as FontFaceSet & { add: (f: FontFace) => void }).add(face);
           await face.load();
         } catch {
           // ignore — expo-font cache above is still populated

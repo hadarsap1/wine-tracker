@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
 import {
@@ -91,6 +92,7 @@ export async function createWineWithInventory(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+  if (wineData.producer) item.producerName = wineData.producer;
   if (inventoryData.location) item.location = inventoryData.location;
   if (inventoryData.purchasePrice) item.purchasePrice = inventoryData.purchasePrice;
   batch.set(itemRef, item);
@@ -134,6 +136,17 @@ export async function updateInventoryItem(
   await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
 }
 
+const OPTIONAL_WINE_FIELDS = [
+  "producer",
+  "region",
+  "country",
+  "vintage",
+  "grape",
+  "notes",
+  "vivinoData",
+  "imageUrl",
+] as const;
+
 export async function updateWine(
   householdId: string,
   wineId: string,
@@ -149,6 +162,7 @@ export async function updateWine(
       | "grape"
       | "notes"
       | "vivinoData"
+      | "imageUrl"
     >
   >
 ): Promise<void> {
@@ -159,12 +173,17 @@ export async function updateWine(
     COLLECTIONS.wines,
     wineId
   );
-  const updates: Record<string, unknown> = {
-    ...data,
-    updatedAt: serverTimestamp(),
-  };
-  if (data.name) {
+  const updates: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (data.name !== undefined) {
+    updates.name = data.name;
     updates.nameNormalized = data.name.toLowerCase().trim();
+  }
+  if (data.type !== undefined) updates.type = data.type;
+  for (const field of OPTIONAL_WINE_FIELDS) {
+    if (field in data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updates[field] = (data as any)[field] === undefined ? deleteField() : (data as any)[field];
+    }
   }
   await updateDoc(ref, updates);
 }

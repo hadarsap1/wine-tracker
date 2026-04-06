@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -10,9 +10,11 @@ import { TextInput, Button, SegmentedButtons, Text, HelperText } from "react-nat
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
+import * as vivinoService from "@services/vivino";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
-import { WineType, type InventoryStatus } from "@/types/index";
+import { WineType, type InventoryStatus, type VivinoData } from "@/types/index";
+import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { AddWineScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
@@ -49,7 +51,66 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
   const [quantityError, setQuantityError] = useState("");
   const [vintageError, setVintageError] = useState("");
 
+  // Vivino
+  const [vivinoData, setVivinoData] = useState<VivinoData | null | undefined>(undefined);
+  const [loadingVivino, setLoadingVivino] = useState(false);
+  const vivinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const householdId = profile?.householdIds?.[0];
+
+  // Live Vivino fetch as user types
+  useEffect(() => {
+    const trimmed = name.trim();
+    setVivinoData(undefined);
+    setLoadingVivino(false);
+    if (trimmed.length < 3) return;
+
+    let cancelled = false;
+    if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+
+    vivinoDebounceRef.current = setTimeout(() => {
+      const query = [producer.trim(), trimmed].filter(Boolean).join(" ").trim();
+      const vintageYear = vintage ? parseInt(vintage, 10) || undefined : undefined;
+      setLoadingVivino(true);
+      vivinoService
+        .fetchVivinoData(query, vintageYear)
+        .then((data) => {
+          if (cancelled) return;
+          setVivinoData(data ?? null);
+          setLoadingVivino(false);
+          // Auto-set wine type when Vivino knows it
+          if (data?.wineType) {
+            const mapped = data.wineType as WineType;
+            if (Object.values(WineType).includes(mapped)) {
+              setType(mapped);
+            }
+          }
+        })
+        .catch(() => {
+          if (!cancelled) { setVivinoData(null); setLoadingVivino(false); }
+        });
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      if (vivinoDebounceRef.current) clearTimeout(vivinoDebounceRef.current);
+    };
+  }, [name, producer, vintage]);
+
+  // What fields Vivino can fill that are currently empty
+  const vivinoCanFill =
+    vivinoData &&
+    ((!producer && vivinoData.producerName) ||
+      (!region && vivinoData.region) ||
+      (!country && vivinoData.country));
+
+  const handleVivinoAutoFill = () => {
+    if (!vivinoData) return;
+    if (!producer && vivinoData.producerName) setProducer(vivinoData.producerName);
+    if (!region && vivinoData.region) setRegion(vivinoData.region);
+    if (!country && vivinoData.country) setCountry(vivinoData.country);
+    showSnackbar(t.vivinoAutoFilled, "success");
+  };
 
   const handleSubmit = async () => {
     let valid = true;
@@ -80,6 +141,7 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
           vintage: vintage ? parseInt(vintage, 10) || undefined : undefined,
           grape: grape.trim() || undefined,
           notes: notes.trim() || undefined,
+          vivinoData: vivinoData ?? undefined,
         },
         {
           quantity: qty,
@@ -121,6 +183,30 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
             {nameError}
           </Text>
         ) : null}
+
+        {/* Vivino live rating */}
+        {(loadingVivino || vivinoData !== undefined) && (
+          <View style={styles.vivinoRow}>
+            <VivinoBadge data={vivinoData} loading={loadingVivino} />
+            {vivinoData?.wineName && (
+              <Text variant="labelSmall" style={styles.vivinoMatchName}>
+                {t.vivinoMatched}: {vivinoData.wineName}
+              </Text>
+            )}
+            {vivinoCanFill && (
+              <Button
+                mode="outlined"
+                onPress={handleVivinoAutoFill}
+                icon="auto-fix"
+                textColor={colors.primary}
+                style={styles.autoFillBtn}
+                compact
+              >
+                {t.autoFillFromVivino}
+              </Button>
+            )}
+          </View>
+        )}
 
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {t.wineType}
@@ -289,6 +375,19 @@ const styles = StyleSheet.create({
   },
   statusButtons: {
     marginBottom: 16,
+  },
+  vivinoRow: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  vivinoMatchName: {
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    textAlign: "right",
+  },
+  autoFillBtn: {
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
   },
   row: {
     flexDirection: "row",

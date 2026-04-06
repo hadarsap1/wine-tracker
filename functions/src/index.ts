@@ -14,16 +14,31 @@ interface VivinoProxyResponse {
   imageUrl?: string;
   wineName?: string;
   wineUrl?: string;
+  wineType?: string;
+  producerName?: string;
+  region?: string;
+  country?: string;
 }
 
 /**
- * Returns true if the returned wine name has at least one significant word
- * in common with the search query (case-insensitive, 3+ char words only).
- * Prevents showing completely unrelated wines as matches.
+ * Maps Vivino's numeric wine type IDs to our WineType enum string values.
  */
-function isRelevantMatch(query: string, wineName: string | undefined): boolean {
-  if (!wineName) return false;
+const VIVINO_TYPE_MAP: Record<number, string> = {
+  1: 'Red',
+  2: 'White',
+  3: 'Sparkling',
+  4: 'Fortified',
+  7: 'Rosé',
+  24: 'Dessert',
+};
 
+/**
+ * Returns a 0–1 score representing how well a wine name matches the query.
+ * Uses word-level overlap on significant words (3+ chars).
+ * A score > 0 means at least one word matched.
+ */
+function matchScore(query: string, wineName: string | undefined): number {
+  if (!wineName) return 0;
   const tokenize = (s: string) =>
     s
       .toLowerCase()
@@ -34,8 +49,25 @@ function isRelevantMatch(query: string, wineName: string | undefined): boolean {
 
   const queryWords = tokenize(query);
   const wineWords = new Set(tokenize(wineName));
+  if (queryWords.length === 0) return 0;
+  const common = queryWords.filter((w) => wineWords.has(w)).length;
+  return common / queryWords.length;
+}
 
-  return queryWords.some((w) => wineWords.has(w));
+/** Pick the highest-scoring match from an array of candidates. Returns null if none score > 0. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function bestMatch(query: string, candidates: any[], getName: (c: any) => string | undefined): any | null {
+  let bestScore = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let best: any | null = null;
+  for (const c of candidates) {
+    const s = matchScore(query, getName(c));
+    if (s > bestScore) {
+      bestScore = s;
+      best = c;
+    }
+  }
+  return bestScore > 0 ? best : null;
 }
 
 const VIVINO_HEADERS = {
@@ -48,7 +80,7 @@ const VIVINO_HEADERS = {
 };
 
 /**
- * Try the Vivino wines search endpoint — lighter and less protected than explore.
+ * Search endpoint — lighter and faster. Returns enriched data including type, producer, region.
  */
 async function searchWines(query: string): Promise<VivinoProxyResponse | null> {
   const q = encodeURIComponent(query.trim());
@@ -62,9 +94,8 @@ async function searchWines(query: string): Promise<VivinoProxyResponse | null> {
   const wines = json?.wines;
   if (!Array.isArray(wines) || wines.length === 0) return null;
 
-  // Find the first result whose name actually matches the query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wine = (wines as any[]).find((w: any) => isRelevantMatch(query, w?.name));
+  const wine = bestMatch(query, wines as any[], (w: any) => w?.name);
   if (!wine) return null;
 
   const score: number = wine?.statistics?.ratings_average ?? 0;
@@ -81,11 +112,21 @@ async function searchWines(query: string): Promise<VivinoProxyResponse | null> {
   const wineId: number | undefined = wine?.id;
   const wineUrl = wineId ? `https://www.vivino.com/wines/${wineId}` : undefined;
 
-  return { score, ratings, imageUrl, wineName: wine?.name, wineUrl };
+  return {
+    score,
+    ratings,
+    imageUrl,
+    wineName: wine?.name,
+    wineUrl,
+    wineType: VIVINO_TYPE_MAP[wine?.type_id as number] ?? undefined,
+    producerName: (wine?.winery?.name as string | undefined) ?? undefined,
+    region: (wine?.region?.name as string | undefined) ?? undefined,
+    country: (wine?.region?.country?.name as string | undefined) ?? undefined,
+  };
 }
 
 /**
- * Fallback: try the explore endpoint.
+ * Fallback: explore endpoint. Handles vintage-specific matching.
  */
 async function exploreWines(query: string, vintage?: number): Promise<VivinoProxyResponse | null> {
   const q = encodeURIComponent(query.trim());
@@ -99,17 +140,19 @@ async function exploreWines(query: string, vintage?: number): Promise<VivinoProx
   const matches: unknown[] | undefined = root?.explore_vintage?.matches;
   if (!matches || matches.length === 0) return null;
 
+  // If a vintage is given, prefer that year's match but keep all candidates for scoring
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const candidates: any[] = vintage
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? [(matches as any[]).find((m: any) => m?.vintage?.year === vintage), ...matches].filter(Boolean)
     : matches as any[];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const match = candidates.find((m: any) => {
-    const name = m?.vintage?.name ?? m?.vintage?.wine?.name;
-    return isRelevantMatch(query, name);
-  });
+  const match = bestMatch(
+    query,
+    candidates,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) => m?.vintage?.name ?? m?.vintage?.wine?.name
+  );
   if (!match) return null;
 
   const vintageData = match?.vintage;
@@ -135,11 +178,45 @@ async function exploreWines(query: string, vintage?: number): Promise<VivinoProx
     imageUrl,
     wineName: vintageData.name ?? vintageData.wine?.name,
     wineUrl,
+    wineType: VIVINO_TYPE_MAP[vintageData.wine?.type_id as number] ?? undefined,
+    producerName: (vintageData.wine?.winery?.name as string | undefined) ?? undefined,
+    region: (vintageData.wine?.region?.name as string | undefined) ?? undefined,
+    country: (vintageData.wine?.region?.country?.name as string | undefined) ?? undefined,
   };
 }
 
 /**
- * Vivino proxy — server-side fetch to bypass CORS. Tries two endpoints.
+ * Tries multiple query strategies to find the best Vivino match.
+ * Strategy order:
+ *  1. Full query → search endpoint
+ *  2. Full query → explore endpoint (vintage-aware)
+ *  3. Shortened query (drop first word, which may be a producer prefix) → search
+ *  4. Shortened query → explore
+ */
+async function searchWithStrategies(query: string, vintage?: number): Promise<VivinoProxyResponse | null> {
+  // Strategy 1: full query, search endpoint
+  const r1 = await searchWines(query);
+  if (r1) return r1;
+
+  // Strategy 2: full query, explore endpoint (better for vintage matching)
+  const r2 = await exploreWines(query, vintage);
+  if (r2) return r2;
+
+  // Strategy 3/4: strip first word (potential producer prefix) and retry
+  const words = query.trim().split(/\s+/);
+  if (words.length > 2) {
+    const shortened = words.slice(1).join(' ');
+    const r3 = await searchWines(shortened);
+    if (r3) return r3;
+    const r4 = await exploreWines(shortened, vintage);
+    if (r4) return r4;
+  }
+
+  return null;
+}
+
+/**
+ * Vivino proxy — server-side fetch to bypass CORS. Tries multiple strategies.
  */
 export const vivinoProxy = onCall<VivinoProxyRequest, Promise<VivinoProxyResponse | null>>(
   { cors: true, timeoutSeconds: 30 },
@@ -155,12 +232,7 @@ export const vivinoProxy = onCall<VivinoProxyRequest, Promise<VivinoProxyRespons
     }
 
     try {
-      // Try faster search endpoint first
-      const result = await searchWines(query);
-      if (result) return result;
-
-      // Fall back to explore endpoint
-      return await exploreWines(query, vintage);
+      return await searchWithStrategies(query.trim(), vintage);
     } catch {
       return null;
     }
