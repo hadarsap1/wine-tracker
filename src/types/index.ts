@@ -135,6 +135,17 @@ export interface Wine extends FirestoreDoc {
 
 export type InventoryStatus = "in_stock" | "on_the_way";
 
+export type StorageUnitType = "fridge" | "rack";
+
+export interface StorageUnit extends FirestoreDoc {
+  name: string;
+  type: StorageUnitType;
+  rows: number;
+  cols: number;
+}
+export type AppStorageUnit = WithDates<StorageUnit>;
+export type CreateStorageUnit = WithFieldValues<StorageUnit>;
+
 export interface InventoryItem extends FirestoreDoc {
   wineId: string;
   wineName: string;
@@ -146,6 +157,9 @@ export interface InventoryItem extends FirestoreDoc {
   purchaseDate?: Timestamp;
   purchasePrice?: number;
   receiptId?: string;
+  storageUnitId?: string;
+  storageRow?: number;
+  storageCol?: number;
 }
 
 export interface DiaryEntry extends FirestoreDoc {
@@ -209,4 +223,5 @@ export const COLLECTIONS = {
   diaryEntries: "diaryEntries",
   receipts: "receipts",
   invites: "invites",
+  storageUnits: "storageUnits",
 } as const;

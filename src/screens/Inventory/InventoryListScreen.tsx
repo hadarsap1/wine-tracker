@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { View, FlatList, StyleSheet, ScrollView } from "react-native";
-import { FAB, Searchbar, ActivityIndicator, SegmentedButtons, Chip } from "react-native-paper";
+import { FAB, Searchbar, ActivityIndicator, SegmentedButtons, Chip, IconButton } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { colors } from "@config/theme";
@@ -21,6 +21,19 @@ export default function InventoryListScreen({
   const [wineTypeFilter, setWineTypeFilter] = useState<WineType | null>(null);
 
   const householdId = profile?.householdIds?.[0];
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <IconButton
+          icon="map-outline"
+          iconColor={colors.text}
+          size={22}
+          onPress={() => navigation.navigate("StorageMap")}
+        />
+      ),
+    });
+  }, [navigation]);
 
   useEffect(() => {
     if (householdId) {

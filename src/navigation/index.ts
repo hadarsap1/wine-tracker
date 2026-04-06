@@ -33,4 +33,6 @@ export type {
   ScanStackParamList,
   ScanMainScreenProps,
   ScanReviewScreenProps,
+  StorageSetupScreenProps,
+  StorageMapScreenProps,
 } from "./types";

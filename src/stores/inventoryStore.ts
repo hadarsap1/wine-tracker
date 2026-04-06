@@ -19,7 +19,18 @@ interface InventoryActions {
   updateItem: (
     householdId: string,
     itemId: string,
-    data: Partial<Pick<AppInventoryItem, "quantity" | "location" | "purchasePrice" | "status">>
+    data: Partial<
+      Pick<
+        AppInventoryItem,
+        | "quantity"
+        | "location"
+        | "purchasePrice"
+        | "status"
+        | "storageUnitId"
+        | "storageRow"
+        | "storageCol"
+      >
+    >
   ) => Promise<void>;
   openBottle: (
     householdId: string,

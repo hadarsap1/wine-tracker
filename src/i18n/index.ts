@@ -287,6 +287,29 @@ export const t = {
     },
   ] as Array<{ icon: string; title: string; body: string }>,
 
+  // Storage map
+  storageMap: "מפת האחסון",
+  storageSetup: "ניהול יחידות אחסון",
+  addStorageUnit: "הוסף יחידה",
+  storageUnitName: "שם היחידה",
+  storageUnitType: "סוג",
+  storageUnitFridge: "מקרר",
+  storageUnitRack: "כוננית",
+  storageUnitRows: "שורות",
+  storageUnitCols: "עמודות",
+  storageUnitSave: "שמור",
+  storageUnitDelete: "מחק יחידה",
+  storageUnitDeleteConfirm:
+    "מחיקת יחידה תסיר את כל שיוכי הבקבוקים לה. להמשיך?",
+  chooseSlot: "בחר מיקום",
+  clearSlot: "הסר מיקום",
+  slotOccupied: "תפוס",
+  slotEmpty: "פנוי",
+  noStorageUnits:
+    "לא הוגדרו יחידות אחסון. הוסף מקרר או כוננית בהגדרות הפרופיל.",
+  assignedSlot: "בקבוק שוייך למיקום",
+  slotCleared: "שיוך המיקום הוסר",
+
   // Stack screen titles
   stackTitles: {
     inventoryList: "המרתף שלי",
@@ -308,5 +331,7 @@ export const t = {
     importOrder: "ייבוא הזמנה",
     importOrderReview: "סקירת הזמנה",
     help: "עזרה ומדריך",
+    storageSetup: "ניהול אחסון",
+    storageMap: "מפת האחסון",
   },
 } as const;

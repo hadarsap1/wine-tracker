@@ -10,6 +10,7 @@ import WineDetailScreen from "@screens/Inventory/WineDetailScreen";
 import EditWineScreen from "@screens/Inventory/EditWineScreen";
 import ImportOrderScreen from "@screens/Inventory/ImportOrderScreen";
 import ImportOrderReviewScreen from "@screens/Inventory/ImportOrderReviewScreen";
+import StorageMapScreen from "@screens/Inventory/StorageMapScreen";
 
 const Stack = createNativeStackNavigator<InventoryStackParamList>();
 
@@ -59,6 +60,11 @@ export default function InventoryStack() {
         name="ImportOrderReview"
         component={ImportOrderReviewScreen}
         options={{ title: t.stackTitles.importOrderReview }}
+      />
+      <Stack.Screen
+        name="StorageMap"
+        component={StorageMapScreen}
+        options={{ title: t.stackTitles.storageMap }}
       />
     </Stack.Navigator>
   );

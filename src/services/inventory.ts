@@ -56,6 +56,9 @@ export interface InventoryFormData {
   status?: InventoryStatus;
   location?: string;
   purchasePrice?: number;
+  storageUnitId?: string;
+  storageRow?: number;
+  storageCol?: number;
 }
 
 export async function createWineWithInventory(
@@ -95,6 +98,9 @@ export async function createWineWithInventory(
   if (wineData.producer) item.producerName = wineData.producer;
   if (inventoryData.location) item.location = inventoryData.location;
   if (inventoryData.purchasePrice) item.purchasePrice = inventoryData.purchasePrice;
+  if (inventoryData.storageUnitId) item.storageUnitId = inventoryData.storageUnitId;
+  if (inventoryData.storageRow !== undefined) item.storageRow = inventoryData.storageRow;
+  if (inventoryData.storageCol !== undefined) item.storageCol = inventoryData.storageCol;
   batch.set(itemRef, item);
 
   await batch.commit();
@@ -121,10 +127,50 @@ export async function getWine(
   return { id: snap.id, ...snap.data() } as Wine;
 }
 
+export async function assignSlot(
+  householdId: string,
+  itemId: string,
+  slot: { storageUnitId: string; storageRow: number; storageCol: number } | null
+): Promise<void> {
+  const ref = doc(
+    db,
+    COLLECTIONS.households,
+    householdId,
+    COLLECTIONS.inventoryItems,
+    itemId
+  );
+  if (slot) {
+    await updateDoc(ref, {
+      storageUnitId: slot.storageUnitId,
+      storageRow: slot.storageRow,
+      storageCol: slot.storageCol,
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await updateDoc(ref, {
+      storageUnitId: deleteField(),
+      storageRow: deleteField(),
+      storageCol: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
+
 export async function updateInventoryItem(
   householdId: string,
   itemId: string,
-  data: Partial<Pick<InventoryItem, "quantity" | "location" | "purchasePrice" | "status">>
+  data: Partial<
+    Pick<
+      InventoryItem,
+      | "quantity"
+      | "location"
+      | "purchasePrice"
+      | "status"
+      | "storageUnitId"
+      | "storageRow"
+      | "storageCol"
+    >
+  >
 ): Promise<void> {
   const ref = doc(
     db,

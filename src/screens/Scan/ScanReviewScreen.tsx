@@ -20,6 +20,7 @@ import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
 import type { VivinoData } from "@/types/index";
 import VivinoBadge from "@components/inventory/VivinoBadge";
+import StorageLocationPicker from "@components/inventory/StorageLocationPicker";
 import type { ScanReviewScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
@@ -40,7 +41,7 @@ export default function ScanReviewScreen({
 }: ScanReviewScreenProps) {
   const { parsedData, imageUri, rawText } = route.params;
   const profile = useAuthStore((s) => s.profile);
-  const { addWine } = useInventoryStore();
+  const { addWine, items } = useInventoryStore();
   const showSnackbar = useSnackbarStore((s) => s.show);
   const [saving, setSaving] = useState(false);
 
@@ -55,7 +56,13 @@ export default function ScanReviewScreen({
   const [grape, setGrape] = useState(parsedData.grape ?? "");
   const [quantity, setQuantity] = useState("1");
   const [purchasePrice, setPurchasePrice] = useState("");
-  const [location, setLocation] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState<{
+    unitId: string;
+    row: number;
+    col: number;
+    unitName: string;
+  } | null>(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [notes, setNotes] = useState("");
   const [nameError, setNameError] = useState("");
   const [showRawText, setShowRawText] = useState(false);
@@ -153,10 +160,12 @@ export default function ScanReviewScreen({
         },
         {
           quantity: qty,
-          location: location.trim() || undefined,
           purchasePrice: purchasePrice
             ? parseFloat(purchasePrice) || undefined
             : undefined,
+          storageUnitId: selectedSlot?.unitId,
+          storageRow: selectedSlot?.row,
+          storageCol: selectedSlot?.col,
         }
       );
       // Upload scanned label image to Storage (non-blocking — best-effort)
@@ -344,14 +353,37 @@ export default function ScanReviewScreen({
             textColor={colors.text}
           />
         </View>
-        <TextInput
-          label={t.storageLocation}
-          value={location}
-          onChangeText={setLocation}
-          style={styles.input}
-          contentStyle={styles.inputContent}
-          textColor={colors.text}
-        />
+        {/* Storage slot picker */}
+        <Text variant="labelLarge" style={styles.sectionLabel}>
+          {t.storageLocation}
+        </Text>
+        <View style={styles.slotRow}>
+          <Text style={styles.slotValue}>
+            {selectedSlot
+              ? `${selectedSlot.unitName} — ${t.storageUnitRows} ${selectedSlot.row + 1}, ${t.storageUnitCols} ${selectedSlot.col + 1}`
+              : t.slotEmpty}
+          </Text>
+          {selectedSlot && (
+            <Button
+              mode="text"
+              compact
+              textColor={colors.error}
+              onPress={() => setSelectedSlot(null)}
+            >
+              {t.clearSlot}
+            </Button>
+          )}
+          <Button
+            mode="outlined"
+            compact
+            textColor={colors.primary}
+            style={styles.chooseSlotButton}
+            onPress={() => setPickerVisible(true)}
+          >
+            {t.chooseSlot}
+          </Button>
+        </View>
+
         <TextInput
           label={t.notes}
           value={notes}
@@ -374,6 +406,30 @@ export default function ScanReviewScreen({
           {t.saveToCellar}
         </Button>
       </ScrollView>
+
+      <StorageLocationPicker
+        visible={pickerVisible}
+        householdId={householdId ?? ""}
+        currentSlot={
+          selectedSlot
+            ? {
+                unitId: selectedSlot.unitId,
+                row: selectedSlot.row,
+                col: selectedSlot.col,
+              }
+            : null
+        }
+        inventoryItems={items}
+        onSelect={(s) => {
+          setSelectedSlot(s);
+          setPickerVisible(false);
+        }}
+        onClear={() => {
+          setSelectedSlot(null);
+          setPickerVisible(false);
+        }}
+        onDismiss={() => setPickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -463,5 +519,24 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 16,
+  },
+  slotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  slotValue: {
+    flex: 1,
+    color: colors.textSecondary,
+    textAlign: "right",
+    fontSize: 14,
+  },
+  chooseSlotButton: {
+    borderColor: colors.primary,
   },
 });

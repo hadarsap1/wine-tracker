@@ -21,7 +21,9 @@ import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { WineDetailScreenProps } from "@navigation/types";
-import type { AppWine, VivinoData } from "@/types/index";
+import { useCellarStore } from "@stores/cellarStore";
+import StorageGrid from "@components/inventory/StorageGrid";
+import type { AppWine, VivinoData, WineType } from "@/types/index";
 
 export default function WineDetailScreen({
   route,
@@ -50,6 +52,8 @@ export default function WineDetailScreen({
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
+  const cellarUnits = useCellarStore((s) => s.units);
+  const loadCellarUnits = useCellarStore((s) => s.loadUnits);
 
   const fetchWine = useCallback(async () => {
     if (!householdId) return;
@@ -94,6 +98,12 @@ export default function WineDetailScreen({
   useEffect(() => {
     fetchWine();
   }, [fetchWine]);
+
+  useEffect(() => {
+    if (householdId && cellarUnits.length === 0) {
+      loadCellarUnits(householdId);
+    }
+  }, [householdId, cellarUnits.length, loadCellarUnits]);
 
   const handleQuantityChange = async (delta: number) => {
     if (!householdId || !item || quantityLoading) return;
@@ -267,6 +277,54 @@ export default function WineDetailScreen({
         )}
         {wine?.grape && <DetailRow label={t.grape} value={wine.grape} />}
         {item.location && <DetailRow label={t.location} value={item.location} />}
+        {item.storageUnitId !== undefined &&
+          item.storageRow !== undefined &&
+          item.storageCol !== undefined &&
+          (() => {
+            const unit = cellarUnits.find((u) => u.id === item.storageUnitId);
+            if (!unit) return null;
+            const slotKey = `${item.storageRow}-${item.storageCol}`;
+            const miniSlots: Record<
+              string,
+              { itemId: string; wineName: string; wineType: WineType }
+            > = {
+              [slotKey]: {
+                itemId: item.id,
+                wineName: item.wineName,
+                wineType: item.wineType as WineType,
+              },
+            };
+            // Populate other items sharing the same unit
+            for (const other of items) {
+              if (
+                other.id !== item.id &&
+                other.storageUnitId === unit.id &&
+                other.storageRow !== undefined &&
+                other.storageCol !== undefined
+              ) {
+                const key = `${other.storageRow}-${other.storageCol}`;
+                miniSlots[key] = {
+                  itemId: other.id,
+                  wineName: other.wineName,
+                  wineType: other.wineType as WineType,
+                };
+              }
+            }
+            return (
+              <View style={styles.miniMapSection}>
+                <Text variant="labelLarge" style={styles.sectionLabel}>
+                  {t.storageLocation} — {unit.name}
+                </Text>
+                <Divider style={styles.sectionDivider} />
+                <StorageGrid
+                  unit={unit}
+                  slots={miniSlots}
+                  mode="view"
+                  highlightItemId={item.id}
+                />
+              </View>
+            );
+          })()}
         {item.purchasePrice != null && (
           <DetailRow
             label={t.purchasePrice}
@@ -531,6 +589,10 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   detailsSection: {
+    gap: 4,
+  },
+  miniMapSection: {
+    marginTop: 16,
     gap: 4,
   },
   sectionLabel: {

@@ -122,6 +122,16 @@ export default function ProfileMainScreen({
         onPress={() => setCurrencyDialogVisible(true)}
       />
 
+      {/* Storage */}
+      <Text variant="labelLarge" style={styles.sectionHeader}>
+        {t.storageMap}
+      </Text>
+      <SettingsRow
+        icon="fridge-outline"
+        label={t.storageSetup}
+        onPress={() => navigation.navigate("StorageSetup")}
+      />
+
       {/* Account */}
       <Text variant="labelLarge" style={styles.sectionHeader}>
         {t.account}

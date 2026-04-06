@@ -29,6 +29,7 @@ export type InventoryStackParamList = {
   EditWine: { wineId: string; itemId: string };
   ImportOrder: undefined;
   ImportOrderReview: { items: ParsedOrderItem[]; rawText: string };
+  StorageMap: undefined;
 };
 
 export type DiaryStackParamList = {
@@ -45,6 +46,7 @@ export type ProfileStackParamList = {
   ManageHousehold: undefined;
   JoinHousehold: undefined;
   Help: undefined;
+  StorageSetup: undefined;
 };
 
 export type SearchStackParamList = {
@@ -111,3 +113,6 @@ export type SearchWineDetailScreenProps = NativeStackScreenProps<SearchStackPara
 
 export type ScanMainScreenProps = NativeStackScreenProps<ScanStackParamList, "ScanMain">;
 export type ScanReviewScreenProps = NativeStackScreenProps<ScanStackParamList, "ScanReview">;
+
+export type StorageSetupScreenProps = NativeStackScreenProps<ProfileStackParamList, "StorageSetup">;
+export type StorageMapScreenProps = NativeStackScreenProps<InventoryStackParamList, "StorageMap">;

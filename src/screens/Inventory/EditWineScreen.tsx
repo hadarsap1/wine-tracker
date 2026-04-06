@@ -16,6 +16,7 @@ import {
 } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
+import { useCellarStore } from "@stores/cellarStore";
 import * as inventoryService from "@services/inventory";
 import * as vivinoService from "@services/vivino";
 import { useSnackbarStore } from "@stores/snackbarStore";
@@ -24,6 +25,7 @@ import { t } from "@i18n/index";
 import { WineType, type VivinoData } from "@/types/index";
 import type { AppWine } from "@/types/index";
 import VivinoBadge from "@components/inventory/VivinoBadge";
+import StorageLocationPicker from "@components/inventory/StorageLocationPicker";
 import type { EditWineScreenProps } from "@navigation/types";
 
 const WINE_TYPES = Object.values(WineType);
@@ -53,7 +55,13 @@ export default function EditWineScreen({
   const [vintage, setVintage] = useState("");
   const [grape, setGrape] = useState("");
   const [quantity, setQuantity] = useState("1");
-  const [location, setLocation] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState<{
+    unitId: string;
+    row: number;
+    col: number;
+    unitName: string;
+  } | null>(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [notes, setNotes] = useState("");
   const [nameError, setNameError] = useState("");
@@ -68,10 +76,13 @@ export default function EditWineScreen({
 
   const householdId = profile?.householdIds?.[0];
   const item = items.find((i) => i.id === itemId);
+  const cellarUnits = useCellarStore((s) => s.units);
+  const loadCellarUnits = useCellarStore((s) => s.loadUnits);
 
   const fetchWine = useCallback(async () => {
     if (!householdId) return;
     setLoadingWine(true);
+    loadCellarUnits(householdId);
     try {
       const w = await inventoryService.getWine(householdId, wineId);
       if (w) {
@@ -96,10 +107,24 @@ export default function EditWineScreen({
       }
       if (item) {
         setQuantity(String(item.quantity));
-        setLocation(item.location ?? "");
         setPurchasePrice(
           item.purchasePrice != null ? String(item.purchasePrice) : ""
         );
+        if (
+          item.storageUnitId &&
+          item.storageRow !== undefined &&
+          item.storageCol !== undefined
+        ) {
+          const unitName =
+            cellarUnits.find((u) => u.id === item.storageUnitId)?.name ??
+            item.storageUnitId;
+          setSelectedSlot({
+            unitId: item.storageUnitId,
+            row: item.storageRow,
+            col: item.storageCol,
+            unitName,
+          });
+        }
       }
       initialFetchDone.current = true;
     } catch (e) {
@@ -190,10 +215,12 @@ export default function EditWineScreen({
 
       await updateItem(householdId, itemId, {
         quantity: qty,
-        location: location.trim() || undefined,
         purchasePrice: purchasePrice
           ? parseFloat(purchasePrice) || undefined
           : undefined,
+        storageUnitId: selectedSlot?.unitId,
+        storageRow: selectedSlot?.row,
+        storageCol: selectedSlot?.col,
       });
 
       navigation.goBack();
@@ -341,14 +368,37 @@ export default function EditWineScreen({
         <HelperText type="error" visible={!!quantityError}>
           {quantityError}
         </HelperText>
-        <TextInput
-          label={t.storageLocation}
-          value={location}
-          onChangeText={setLocation}
-          style={styles.input}
-          contentStyle={styles.inputContent}
-            textColor={colors.text}
-        />
+        {/* Storage slot picker */}
+        <Text variant="labelLarge" style={styles.sectionLabel}>
+          {t.storageLocation}
+        </Text>
+        <View style={styles.slotRow}>
+          <Text style={styles.slotValue}>
+            {selectedSlot
+              ? `${selectedSlot.unitName} — ${t.storageUnitRows} ${selectedSlot.row + 1}, ${t.storageUnitCols} ${selectedSlot.col + 1}`
+              : t.slotEmpty}
+          </Text>
+          {selectedSlot && (
+            <Button
+              mode="text"
+              compact
+              textColor={colors.error}
+              onPress={() => setSelectedSlot(null)}
+            >
+              {t.clearSlot}
+            </Button>
+          )}
+          <Button
+            mode="outlined"
+            compact
+            textColor={colors.primary}
+            style={styles.chooseSlotButton}
+            onPress={() => setPickerVisible(true)}
+          >
+            {t.chooseSlot}
+          </Button>
+        </View>
+
         <TextInput
           label={t.notes}
           value={notes}
@@ -376,6 +426,31 @@ export default function EditWineScreen({
           {t.saveChanges}
         </Button>
       </ScrollView>
+
+      <StorageLocationPicker
+        visible={pickerVisible}
+        householdId={householdId ?? ""}
+        currentSlot={
+          selectedSlot
+            ? {
+                unitId: selectedSlot.unitId,
+                row: selectedSlot.row,
+                col: selectedSlot.col,
+              }
+            : null
+        }
+        inventoryItems={items}
+        excludeItemId={itemId}
+        onSelect={(s) => {
+          setSelectedSlot(s);
+          setPickerVisible(false);
+        }}
+        onClear={() => {
+          setSelectedSlot(null);
+          setPickerVisible(false);
+        }}
+        onDismiss={() => setPickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -436,5 +511,24 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 16,
+  },
+  slotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  slotValue: {
+    flex: 1,
+    color: colors.textSecondary,
+    textAlign: "right",
+    fontSize: 14,
+  },
+  chooseSlotButton: {
+    borderColor: colors.primary,
   },
 });
