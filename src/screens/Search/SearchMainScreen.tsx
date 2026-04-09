@@ -164,6 +164,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     color: colors.text,
+    textAlign: "right",
   },
   chipsContainer: {
     paddingBottom: 8,

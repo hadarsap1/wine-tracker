@@ -111,19 +111,21 @@ export default function InventoryListScreen({
         <Chip
           selected={wineTypeFilter === null}
           onPress={() => setWineTypeFilter(null)}
-          style={styles.filterChip}
+          style={[styles.filterChip, wineTypeFilter === null && styles.filterChipSelected]}
           selectedColor={colors.primary}
+          showSelectedCheck={false}
           compact
         >
-          הכל
+          {t.all}
         </Chip>
         {Object.values(WineType).map((type) => (
           <Chip
             key={type}
             selected={wineTypeFilter === type}
             onPress={() => setWineTypeFilter(wineTypeFilter === type ? null : type)}
-            style={styles.filterChip}
+            style={[styles.filterChip, wineTypeFilter === type && styles.filterChipSelected]}
             selectedColor={colors.primary}
+            showSelectedCheck={false}
             compact
           >
             {t.wineTypeLabels[type]}
@@ -144,8 +146,6 @@ export default function InventoryListScreen({
             icon={tab === "in_stock" ? "bottle-wine-outline" : "truck-delivery-outline"}
             title={tab === "in_stock" ? t.inventoryEmpty : t.onTheWayEmpty}
             subtitle={tab === "in_stock" ? t.inventoryEmptySubtitle : t.onTheWayEmptySubtitle}
-            actionLabel={tab === "in_stock" ? t.addFirstWine : t.addWine}
-            onAction={() => navigation.navigate("AddWine")}
           />
         }
       />
@@ -157,7 +157,15 @@ export default function InventoryListScreen({
             onPress={() => navigation.navigate("ImportOrder")}
             color={colors.primary}
             customSize={46}
-            label={t.importOrder}
+          />
+        )}
+        {tab === "in_stock" && (
+          <FAB
+            icon="file-excel-outline"
+            style={styles.fabSecondary}
+            onPress={() => navigation.navigate("ImportExcel")}
+            color={colors.primary}
+            customSize={46}
           />
         )}
         <FAB
@@ -204,8 +212,14 @@ const styles = StyleSheet.create({
   filterChip: {
     backgroundColor: colors.card,
   },
+  filterChipSelected: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
   searchInput: {
     color: colors.text,
+    textAlign: "right",
   },
   list: {
     paddingVertical: 8,
@@ -213,6 +227,7 @@ const styles = StyleSheet.create({
   },
   emptyList: {
     flexGrow: 1,
+    paddingBottom: 120,
   },
   fabGroup: {
     position: "absolute",

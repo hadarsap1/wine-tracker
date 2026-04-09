@@ -1,12 +1,12 @@
 import React from "react";
-import { View, ScrollView, StyleSheet, Pressable } from "react-native";
+import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { Text } from "react-native-paper";
 import { colors } from "@config/theme";
 import { WineType } from "@/types/index";
 import type { AppStorageUnit } from "@/types/index";
 
-const CELL_SIZE = 36;
-const CELL_GAP = 2;
+const CELL_SIZE = 54;
+const CELL_GAP = 3;
 
 const TYPE_COLORS: Record<WineType, string> = {
   [WineType.Red]: "#7b1c2e",
@@ -32,6 +32,7 @@ interface StorageGridProps {
   selectedSlot?: { row: number; col: number } | null;
   highlightItemId?: string;
   onSlotPress?: (row: number, col: number) => void;
+  cellSize?: number;
 }
 
 export default function StorageGrid({
@@ -41,21 +42,21 @@ export default function StorageGrid({
   selectedSlot,
   highlightItemId,
   onSlotPress,
+  cellSize,
 }: StorageGridProps): React.ReactElement {
-  const colLabels = Array.from({ length: unit.cols }, (_, i) =>
-    String.fromCharCode(65 + i)
-  );
+  const CS = cellSize ?? CELL_SIZE;
+  const colLabels = Array.from({ length: unit.cols }, (_, i) => String(i + 1));
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <View>
         <View style={styles.container}>
           {/* Column headers */}
           <View style={styles.headerRow}>
             {/* spacer for row label */}
-            <View style={styles.rowLabelSpacer} />
+            <View style={[styles.rowLabelSpacer, { width: CS }]} />
             {colLabels.map((label) => (
-              <View key={label} style={styles.colHeader}>
+              <View key={label} style={[styles.colHeader, { width: CS }]}>
                 <Text style={styles.headerText}>{label}</Text>
               </View>
             ))}
@@ -89,14 +90,17 @@ export default function StorageGrid({
 
                   const borderWidth = isHighlighted || isSelected ? 2 : 1;
 
-                  const canPress = mode === "pick" && !isOccupied;
+                  const canPress = mode === "pick" ? !isOccupied : isOccupied;
 
                   return (
-                    <Pressable
+                    <TouchableOpacity
                       key={colIdx}
+                      activeOpacity={canPress ? 0.6 : 1}
                       style={[
                         styles.cell,
                         {
+                          width: CS,
+                          height: CS,
                           backgroundColor: cellBg,
                           borderColor,
                           borderWidth,
@@ -105,7 +109,6 @@ export default function StorageGrid({
                       onPress={
                         canPress ? () => onSlotPress?.(rowIdx, colIdx) : undefined
                       }
-                      disabled={mode === "pick" && isOccupied}
                     >
                       {isOccupied ? (
                         <Text
@@ -113,23 +116,23 @@ export default function StorageGrid({
                           numberOfLines={2}
                           ellipsizeMode="tail"
                         >
-                          {slotData.wineName.slice(0, 6)}
+                          {slotData.wineName.slice(0, 10)}
                         </Text>
                       ) : (
                         <Text style={styles.emptyDot}>·</Text>
                       )}
-                    </Pressable>
+                    </TouchableOpacity>
                   );
                 })}
                 {/* Row label on the right (RTL) */}
-                <View style={styles.rowLabel}>
+                <View style={[styles.rowLabel, { width: CS, height: CS }]}>
                   <Text style={styles.headerText}>{rowNum}</Text>
                 </View>
               </View>
             );
           })}
         </View>
-      </ScrollView>
+      </View>
     </ScrollView>
   );
 }
@@ -175,9 +178,9 @@ const styles = StyleSheet.create({
   },
   cellText: {
     color: "#ffffff",
-    fontSize: 7,
+    fontSize: 9,
     textAlign: "center",
-    lineHeight: 9,
+    lineHeight: 11,
   },
   emptyDot: {
     color: colors.textSecondary,

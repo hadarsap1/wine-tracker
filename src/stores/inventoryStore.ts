@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as inventoryService from "@services/inventory";
 import * as diaryService from "@services/diary";
 import type { AppInventoryItem, AppWine, WineType, AppDiaryEntry } from "@/types/index";
+import * as analytics from "@services/analytics";
 
 interface InventoryState {
   items: AppInventoryItem[];
@@ -29,6 +30,7 @@ interface InventoryActions {
         | "storageUnitId"
         | "storageRow"
         | "storageCol"
+        | "storageSlots"
       >
     >
   ) => Promise<void>;
@@ -37,7 +39,8 @@ interface InventoryActions {
     itemId: string,
     wineId: string,
     wineName: string,
-    wineType: WineType
+    wineType: WineType,
+    slotToRemove?: { unitId: string; row: number; col: number }
   ) => Promise<void>;
   updateWine: (
     householdId: string,
@@ -87,6 +90,12 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         inventory
       );
       await get().loadItems(householdId);
+      analytics.track.wineAdded({
+        wineType: wine.type,
+        hasVintage: wine.vintage != null,
+        hasStorage: !!inventory.storageUnitId,
+        quantity: inventory.quantity,
+      });
       return wineId;
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
@@ -118,7 +127,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       if (data.name) updates.wineName = data.name;
       if (data.type) updates.wineType = data.type;
       if (Object.keys(updates).length > 0) {
-        await inventoryService.updateInventoryItem(householdId, itemId, {});
+        await inventoryService.updateInventoryItem(householdId, itemId, updates);
         set((state) => ({
           items: state.items.map((item) =>
             item.id === itemId ? { ...item, ...updates } : item
@@ -135,6 +144,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     set({ error: null });
     try {
       await inventoryService.deleteInventoryItem(householdId, itemId);
+      analytics.track.wineDeleted();
       set((state) => ({
         items: state.items.filter((item) => item.id !== itemId),
       }));
@@ -144,7 +154,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     }
   },
 
-  openBottle: async (householdId, itemId, wineId, wineName, wineType) => {
+  openBottle: async (householdId, itemId, wineId, wineName, wineType, slotToRemove?) => {
     set({ error: null });
     try {
       const item = get().items.find((i) => i.id === itemId);
@@ -155,8 +165,10 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         householdId,
         itemId,
         qty,
-        { entryId, wineId, wineName, wineType }
+        { entryId, wineId, wineName, wineType },
+        slotToRemove
       );
+      analytics.track.bottleOpened();
 
       if (deleted) {
         set((state) => ({
@@ -165,7 +177,17 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       } else {
         set((state) => ({
           items: state.items.map((i) =>
-            i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i
+            i.id === itemId
+              ? {
+                  ...i,
+                  quantity: i.quantity - 1,
+                  storageSlots: slotToRemove
+                    ? (i.storageSlots ?? []).filter(
+                        (s) => !(s.unitId === slotToRemove.unitId && s.row === slotToRemove.row && s.col === slotToRemove.col)
+                      )
+                    : i.storageSlots,
+                }
+              : i
           ),
         }));
       }

@@ -8,7 +8,6 @@ import {
 import { Button, Text } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "@config/theme";
-import { env } from "@config/env";
 import { t } from "@i18n/index";
 import { detectText } from "@services/vision";
 import { parseOrderText } from "@/utils/parseOrderText";
@@ -57,15 +56,6 @@ export default function ImportOrderScreen({ navigation }: ImportOrderScreenProps
       await processImage(result.assets[0].uri);
     }
   };
-
-  if (!env.googleCloudVisionApiKey) {
-    return (
-      <View style={styles.container}>
-        <Text variant="headlineSmall" style={styles.title}>{t.scanUnavailable}</Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>{t.scanUnavailableMsg}</Text>
-      </View>
-    );
-  }
 
   if (processing && imageUri) {
     return (

@@ -10,6 +10,7 @@ import { Text, TextInput, Button } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import * as inviteService from "@services/invite";
 import { useSnackbarStore } from "@stores/snackbarStore";
+import * as analytics from "@services/analytics";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import type { JoinHouseholdScreenProps } from "@navigation/types";
@@ -35,6 +36,7 @@ export default function JoinHouseholdScreen({
         profile.email
       );
       await reloadProfile();
+      analytics.track.householdJoined();
       showSnackbar(t.joinSuccess, "success");
       navigation.goBack();
     } catch (e) {

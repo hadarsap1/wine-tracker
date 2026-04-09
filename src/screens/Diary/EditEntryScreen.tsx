@@ -70,6 +70,7 @@ export default function EditEntryScreen({
       );
 
       // Upload new local images (those not starting with http)
+      const newlyUploadedUrls: string[] = [];
       const finalUrls = await Promise.all(
         images.map(async (uri, index) => {
           if (uri.startsWith("http")) return uri;
@@ -78,15 +79,23 @@ export default function EditEntryScreen({
             entryId,
             `photo_${Date.now()}_${index}.jpg`
           );
-          return uploadImage(uri, path);
+          const url = await uploadImage(uri, path);
+          newlyUploadedUrls.push(url);
+          return url;
         })
       );
 
-      await updateEntry(householdId, entryId, {
-        rating: (rating as Rating | null),
-        notes: notes.trim() || undefined,
-        imageUrls: finalUrls,
-      });
+      try {
+        await updateEntry(householdId, entryId, {
+          rating: (rating as Rating | null),
+          notes: notes.trim() || undefined,
+          imageUrls: finalUrls,
+        });
+      } catch (firestoreError) {
+        // Roll back newly uploaded images so Storage doesn't accumulate orphans
+        await Promise.allSettled(newlyUploadedUrls.map((url) => deleteImage(url)));
+        throw firestoreError;
+      }
 
       navigation.goBack();
     } catch (e) {

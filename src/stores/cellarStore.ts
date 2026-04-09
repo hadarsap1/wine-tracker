@@ -37,17 +37,21 @@ export const useCellarStore = create<CellarState & CellarActions>(
           updatedAt: u.updatedAt?.toDate?.() ?? new Date(),
         })) as AppStorageUnit[];
         set({ units: appUnits, loading: false });
-      } catch {
+      } catch (e) {
         set({ loading: false });
+        console.error("Failed to load storage units:", e);
       }
     },
 
     addUnit: async (householdId, data) => {
       const id = await cellarService.createStorageUnit(householdId, data);
-      // Reload to get server timestamps converted
-      await get().loadUnits(householdId);
-      // Suppress unused variable lint warning — id used as side effect via reload
-      void id;
+      const now = new Date();
+      set((state) => ({
+        units: [
+          ...state.units,
+          { id, ...data, createdAt: now, updatedAt: now } as AppStorageUnit,
+        ],
+      }));
     },
 
     updateUnit: async (householdId, unitId, data) => {

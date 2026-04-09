@@ -248,6 +248,14 @@ function extractNameAndProducer(
   return { name, producer };
 }
 
+// ─── Shared confidence helper ─────────────────────────────────────────────────
+
+export function calcConfidence(data: Omit<ParsedLabelData, "confidence">): ParsedLabelData["confidence"] {
+  const fieldsFound = [data.name, data.type, data.vintage, data.grape, data.country, data.producer]
+    .filter(Boolean).length;
+  return fieldsFound >= 4 ? "high" : fieldsFound >= 2 ? "medium" : "low";
+}
+
 // ─── Main Parser ─────────────────────────────────────────────────────────────
 
 export function parseLabelText(rawText: string): ParsedLabelData {
@@ -267,17 +275,6 @@ export function parseLabelText(rawText: string): ParsedLabelData {
 
   const { name, producer } = extractNameAndProducer(rawText, usedTerms);
 
-  // Confidence based on how many fields we found
-  let fieldsFound = 0;
-  if (name) fieldsFound++;
-  if (type) fieldsFound++;
-  if (vintage) fieldsFound++;
-  if (grape) fieldsFound++;
-  if (country) fieldsFound++;
-  if (producer) fieldsFound++;
-
-  const confidence: ParsedLabelData["confidence"] =
-    fieldsFound >= 4 ? "high" : fieldsFound >= 2 ? "medium" : "low";
-
-  return { name, type, producer, vintage, grape, region, country, confidence };
+  const partial = { name, type, producer, vintage, grape, region, country };
+  return { ...partial, confidence: calcConfidence(partial) };
 }

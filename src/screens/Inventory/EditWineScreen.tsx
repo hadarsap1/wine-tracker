@@ -22,7 +22,7 @@ import * as vivinoService from "@services/vivino";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
-import { WineType, type VivinoData } from "@/types/index";
+import { WineType, type VivinoData, type StorageSlot } from "@/types/index";
 import type { AppWine } from "@/types/index";
 import VivinoBadge from "@components/inventory/VivinoBadge";
 import StorageLocationPicker from "@components/inventory/StorageLocationPicker";
@@ -55,12 +55,7 @@ export default function EditWineScreen({
   const [vintage, setVintage] = useState("");
   const [grape, setGrape] = useState("");
   const [quantity, setQuantity] = useState("1");
-  const [selectedSlot, setSelectedSlot] = useState<{
-    unitId: string;
-    row: number;
-    col: number;
-    unitName: string;
-  } | null>(null);
+  const [storageSlots, setStorageSlots] = useState<StorageSlot[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [notes, setNotes] = useState("");
@@ -82,7 +77,7 @@ export default function EditWineScreen({
   const fetchWine = useCallback(async () => {
     if (!householdId) return;
     setLoadingWine(true);
-    loadCellarUnits(householdId);
+    await loadCellarUnits(householdId);
     try {
       const w = await inventoryService.getWine(householdId, wineId);
       if (w) {
@@ -110,20 +105,14 @@ export default function EditWineScreen({
         setPurchasePrice(
           item.purchasePrice != null ? String(item.purchasePrice) : ""
         );
-        if (
+        if (item.storageSlots?.length) {
+          setStorageSlots(item.storageSlots);
+        } else if (
           item.storageUnitId &&
           item.storageRow !== undefined &&
           item.storageCol !== undefined
         ) {
-          const unitName =
-            cellarUnits.find((u) => u.id === item.storageUnitId)?.name ??
-            item.storageUnitId;
-          setSelectedSlot({
-            unitId: item.storageUnitId,
-            row: item.storageRow,
-            col: item.storageCol,
-            unitName,
-          });
+          setStorageSlots([{ unitId: item.storageUnitId, row: item.storageRow, col: item.storageCol }]);
         }
       }
       initialFetchDone.current = true;
@@ -193,7 +182,8 @@ export default function EditWineScreen({
     if (!name.trim()) { setNameError(t.wineNameRequired); valid = false; }
     const qty = parseInt(quantity, 10);
     if (isNaN(qty) || qty < 1) { setQuantityError(t.invalidQuantityMsg); valid = false; }
-    if (!valid || !householdId) return;
+    if (!valid) return;
+    if (!householdId) { setSubmitError(t.noHousehold); return; }
 
     setSubmitError("");
     try {
@@ -218,14 +208,15 @@ export default function EditWineScreen({
         purchasePrice: purchasePrice
           ? parseFloat(purchasePrice) || undefined
           : undefined,
-        storageUnitId: selectedSlot?.unitId,
-        storageRow: selectedSlot?.row,
-        storageCol: selectedSlot?.col,
+        storageSlots: storageSlots.length > 0 ? storageSlots : undefined,
+        storageUnitId: undefined,
+        storageRow: undefined,
+        storageCol: undefined,
       });
 
       navigation.goBack();
     } catch (e) {
-      setSubmitError((e as Error).message || t.failedToCreateWine);
+      setSubmitError((e as Error).message || t.failedToUpdateWine);
     }
   };
 
@@ -368,36 +359,37 @@ export default function EditWineScreen({
         <HelperText type="error" visible={!!quantityError}>
           {quantityError}
         </HelperText>
-        {/* Storage slot picker */}
+        {/* Storage slots */}
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {t.storageLocation}
         </Text>
-        <View style={styles.slotRow}>
-          <Text style={styles.slotValue}>
-            {selectedSlot
-              ? `${selectedSlot.unitName} — ${t.storageUnitRows} ${selectedSlot.row + 1}, ${t.storageUnitCols} ${selectedSlot.col + 1}`
-              : t.slotEmpty}
-          </Text>
-          {selectedSlot && (
-            <Button
-              mode="text"
-              compact
-              textColor={colors.error}
-              onPress={() => setSelectedSlot(null)}
-            >
-              {t.clearSlot}
-            </Button>
-          )}
-          <Button
-            mode="outlined"
-            compact
-            textColor={colors.primary}
-            style={styles.chooseSlotButton}
-            onPress={() => setPickerVisible(true)}
-          >
-            {t.chooseSlot}
-          </Button>
-        </View>
+        {storageSlots.map((slot, idx) => {
+          const unitName = cellarUnits.find((u) => u.id === slot.unitId)?.name ?? slot.unitId;
+          return (
+            <View key={idx} style={styles.slotRow}>
+              <Text style={styles.slotValue}>
+                {unitName} — {slot.row + 1}/{slot.col + 1}
+              </Text>
+              <Button
+                mode="text"
+                compact
+                textColor={colors.error}
+                onPress={() => setStorageSlots((prev) => prev.filter((_, i) => i !== idx))}
+              >
+                {t.clearSlot}
+              </Button>
+            </View>
+          );
+        })}
+        <Button
+          mode="outlined"
+          compact
+          textColor={colors.primary}
+          style={styles.chooseSlotButton}
+          onPress={() => setPickerVisible(true)}
+        >
+          {t.addSlot}
+        </Button>
 
         <TextInput
           label={t.notes}
@@ -430,25 +422,14 @@ export default function EditWineScreen({
       <StorageLocationPicker
         visible={pickerVisible}
         householdId={householdId ?? ""}
-        currentSlot={
-          selectedSlot
-            ? {
-                unitId: selectedSlot.unitId,
-                row: selectedSlot.row,
-                col: selectedSlot.col,
-              }
-            : null
-        }
+        currentSlot={null}
         inventoryItems={items}
         excludeItemId={itemId}
         onSelect={(s) => {
-          setSelectedSlot(s);
+          setStorageSlots((prev) => [...prev, { unitId: s.unitId, row: s.row, col: s.col }]);
           setPickerVisible(false);
         }}
-        onClear={() => {
-          setSelectedSlot(null);
-          setPickerVisible(false);
-        }}
+        onClear={() => setPickerVisible(false)}
         onDismiss={() => setPickerVisible(false)}
       />
     </KeyboardAvoidingView>
@@ -499,7 +480,7 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: -8,
     marginBottom: 8,
-    marginLeft: 4,
+    marginStart: 4,
   },
   vivinoRow: {
     marginBottom: 16,

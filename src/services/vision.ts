@@ -1,4 +1,8 @@
-import { env } from "@config/env";
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@config/firebase';
+import type { ParsedLabelData } from '@/utils/parseLabelText';
+import { calcConfidence } from '@/utils/parseLabelText';
+import { WineType } from '@/types/index';
 
 interface VisionResponse {
   fullText: string;
@@ -6,59 +10,71 @@ interface VisionResponse {
   error?: string;
 }
 
-export async function detectText(imageUri: string): Promise<VisionResponse> {
-  const apiKey = env.googleCloudVisionApiKey;
-  if (!apiKey) {
-    return { fullText: "", locale: "", error: "Google Cloud Vision API key is not configured" };
-  }
-
-  // Convert image to base64
+async function imageUriToBase64(imageUri: string): Promise<string> {
   const response = await fetch(imageUri);
   const blob = await response.blob();
-  const base64 = await new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
       // Strip data URL prefix (e.g. "data:image/jpeg;base64,")
-      const base64Data = result.split(",")[1] ?? result;
+      const base64Data = result.split(',')[1] ?? result;
       resolve(base64Data);
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
 
-  const body = {
-    requests: [
-      {
-        image: { content: base64 },
-        features: [{ type: "TEXT_DETECTION" }],
-      },
-    ],
+export async function detectText(imageUri: string): Promise<VisionResponse> {
+  const base64 = await imageUriToBase64(imageUri);
+  const fn = httpsCallable<{ imageBase64: string }, VisionResponse>(functions, 'detectLabelText');
+  try {
+    const result = await fn({ imageBase64: base64 });
+    return result.data;
+  } catch (e) {
+    return { fullText: '', locale: '', error: (e as Error).message };
+  }
+}
+
+// ── AI-powered label analysis (GPT-4o Vision via Cloud Function) ──────────────
+
+interface AnalyzeLabelRaw {
+  name?: string;
+  producer?: string;
+  type?: string;
+  vintage?: number;
+  grape?: string;
+  region?: string;
+  country?: string;
+}
+
+const WINE_TYPE_MAP: Record<string, WineType> = {
+  Red: WineType.Red,
+  White: WineType.White,
+  'Rosé': WineType['Rosé'],
+  Sparkling: WineType.Sparkling,
+  Dessert: WineType.Dessert,
+  Fortified: WineType.Fortified,
+  Orange: WineType.Orange,
+  Other: WineType.Other,
+};
+
+export async function analyzeLabelWithAI(imageUri: string): Promise<ParsedLabelData> {
+  const base64 = await imageUriToBase64(imageUri);
+  const fn = httpsCallable<{ imageBase64: string }, AnalyzeLabelRaw>(functions, 'analyzeLabel');
+  const result = await fn({ imageBase64: base64 });
+  const raw = result.data;
+
+  const partial = {
+    name: raw.name,
+    producer: raw.producer,
+    type: raw.type ? WINE_TYPE_MAP[raw.type] : undefined,
+    vintage: raw.vintage,
+    grape: raw.grape,
+    region: raw.region,
+    country: raw.country,
   };
 
-  const apiResponse = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }
-  );
-
-  if (!apiResponse.ok) {
-    const errorText = await apiResponse.text();
-    return { fullText: "", locale: "", error: `Vision API error: ${apiResponse.status} ${errorText}` };
-  }
-
-  const data = await apiResponse.json();
-  const annotations = data.responses?.[0]?.textAnnotations;
-
-  if (!annotations || annotations.length === 0) {
-    return { fullText: "", locale: "", error: "No text detected in image" };
-  }
-
-  return {
-    fullText: annotations[0].description ?? "",
-    locale: annotations[0].locale ?? "",
-  };
+  return { ...partial, confidence: calcConfidence(partial) };
 }

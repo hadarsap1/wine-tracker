@@ -81,15 +81,15 @@ export default function StorageSetupScreen({}: StorageSetupScreenProps): React.R
     const rows = parseInt(form.rows, 10);
     const cols = parseInt(form.cols, 10);
     if (!form.name.trim()) {
-      showSnackbar(t.storageUnitName + " " + t.wineNameRequired, "error");
+      showSnackbar(t.storageUnitNameRequired, "error");
       return;
     }
     if (isNaN(rows) || rows < 1 || rows > 20) {
-      showSnackbar(t.storageUnitRows, "error");
+      showSnackbar(t.storageUnitRowsInvalid, "error");
       return;
     }
     if (isNaN(cols) || cols < 1 || cols > 20) {
-      showSnackbar(t.storageUnitCols, "error");
+      showSnackbar(t.storageUnitColsInvalid, "error");
       return;
     }
 
@@ -217,25 +217,29 @@ export default function StorageSetupScreen({}: StorageSetupScreenProps): React.R
               </>
             )}
             <View style={styles.row}>
-              <TextInput
-                label={t.storageUnitRows}
-                value={form.rows}
-                onChangeText={(v) => setForm((f) => ({ ...f, rows: v }))}
-                keyboardType="numeric"
-                style={[styles.input, styles.flex]}
-                contentStyle={styles.inputContent}
-                textColor={colors.text}
-              />
+              <View style={styles.flex}>
+                <Text variant="labelSmall" style={styles.fieldLabel}>{t.storageUnitRows}</Text>
+                <TextInput
+                  value={form.rows}
+                  onChangeText={(v) => setForm((f) => ({ ...f, rows: v }))}
+                  keyboardType="numeric"
+                  style={styles.input}
+                  contentStyle={styles.inputContent}
+                  textColor={colors.text}
+                />
+              </View>
               <View style={styles.gap} />
-              <TextInput
-                label={t.storageUnitCols}
-                value={form.cols}
-                onChangeText={(v) => setForm((f) => ({ ...f, cols: v }))}
-                keyboardType="numeric"
-                style={[styles.input, styles.flex]}
-                contentStyle={styles.inputContent}
-                textColor={colors.text}
-              />
+              <View style={styles.flex}>
+                <Text variant="labelSmall" style={styles.fieldLabel}>{t.storageUnitCols}</Text>
+                <TextInput
+                  value={form.cols}
+                  onChangeText={(v) => setForm((f) => ({ ...f, cols: v }))}
+                  keyboardType="numeric"
+                  style={styles.input}
+                  contentStyle={styles.inputContent}
+                  textColor={colors.text}
+                />
+              </View>
             </View>
             <View style={styles.formActions}>
               <Button
@@ -362,6 +366,11 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: colors.textSecondary,
     marginBottom: 8,
+    textAlign: "right",
+  },
+  fieldLabel: {
+    color: colors.textSecondary,
+    marginBottom: 4,
     textAlign: "right",
   },
   typeButtons: {

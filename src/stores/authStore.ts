@@ -6,6 +6,7 @@ import * as householdService from "@services/household";
 import type { UserProfile, UserPreferences } from "@/types/index";
 import { useInventoryStore } from "./inventoryStore";
 import { useDiaryStore } from "./diaryStore";
+import * as analytics from "@services/analytics";
 
 interface AuthState {
   user: User | null;
@@ -26,6 +27,7 @@ interface AuthActions {
   renameHousehold: (householdId: string, name: string) => Promise<void>;
   createAdditionalHousehold: (name: string) => Promise<void>;
   setActiveHousehold: (householdId: string) => Promise<void>;
+  leaveHousehold: (householdId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -70,6 +72,9 @@ async function bootstrapUserAccount(user: User): Promise<UserProfile | null> {
   return profile;
 }
 
+// Tracks the sign-in method across the async gap between signIn() and onAuthStateChanged
+let _pendingSignInMethod: 'email' | 'google' | null = null;
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   profile: null,
@@ -81,6 +86,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (user) {
         try {
           const profile = await bootstrapUserAccount(user);
+          analytics.identify(user.uid, {
+            email: user.email ?? undefined,
+            name: user.displayName ?? profile?.displayName ?? undefined,
+          });
+          if (_pendingSignInMethod) {
+            analytics.track.signedIn(_pendingSignInMethod);
+            _pendingSignInMethod = null;
+          }
           set({ user, profile, loading: false, error: null });
         } catch {
           // On transient errors (network blip, token refresh), preserve any profile
@@ -89,6 +102,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           set({ user, profile: existing, loading: false, error: null });
         }
       } else {
+        analytics.reset();
         useInventoryStore.getState().reset();
         useDiaryStore.getState().reset();
         set({ user: null, profile: null, loading: false, error: null });
@@ -107,6 +121,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const profile = await userService.getUserProfile(user.uid);
       // Ensure member doc exists right away (onAuthStateChanged may fire after we set state)
       await householdService.ensureMemberExists(householdId, user.uid, displayName, email);
+      analytics.identify(user.uid, { email, name: displayName, createdAt: new Date() });
+      analytics.track.accountCreated('email');
       set({ user, profile, loading: false });
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
@@ -118,6 +134,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signIn: async (email, password) => {
     set({ loading: true, error: null });
     try {
+      _pendingSignInMethod = 'email';
       await authService.signIn(email, password);
       // State will be set by onAuthStateChanged callback in initialize()
     } catch (e) {
@@ -130,6 +147,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signInWithGoogle: async () => {
     set({ loading: true, error: null });
     try {
+      _pendingSignInMethod = 'google';
       await authService.signInWithGoogle();
       // State will be set by onAuthStateChanged callback in initialize()
     } catch (e) {
@@ -141,6 +159,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signOut: async () => {
     set({ loading: true, error: null });
     try {
+      analytics.track.signedOut();
+      analytics.reset();
       await authService.signOut();
       useInventoryStore.getState().reset();
       useDiaryStore.getState().reset();
@@ -190,6 +210,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const updated = [...(profile.householdIds ?? []), newId];
     await userService.updateUserHouseholdIds(user.uid, updated);
     const newProfile = await userService.getUserProfile(user.uid);
+    analytics.track.householdCreated(true);
     set({ profile: newProfile });
   },
 
@@ -204,6 +225,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     // Reset stores so they reload with the new active household
     useInventoryStore.getState().reset();
     useDiaryStore.getState().reset();
+  },
+
+  leaveHousehold: async (householdId) => {
+    const { user, profile } = get();
+    if (!user || !profile) return;
+    await householdService.leaveHousehold(householdId, user.uid);
+    const updated = (profile.householdIds ?? []).filter((id) => id !== householdId);
+    await userService.updateUserHouseholdIds(user.uid, updated);
+    const newProfile = await userService.getUserProfile(user.uid);
+    set({ profile: newProfile });
   },
 
   clearError: () => set({ error: null }),

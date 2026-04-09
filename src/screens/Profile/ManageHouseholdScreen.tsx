@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
 import * as inviteService from "@services/invite";
 import * as householdService from "@services/household";
+import * as analytics from "@services/analytics";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { env } from "@config/env";
@@ -19,7 +20,7 @@ interface HouseholdInfo {
 export default function ManageHouseholdScreen({
   navigation,
 }: ManageHouseholdScreenProps) {
-  const { user, profile, renameHousehold, createAdditionalHousehold, setActiveHousehold } = useAuthStore();
+  const { user, profile, renameHousehold, createAdditionalHousehold, setActiveHousehold, leaveHousehold } = useAuthStore();
   const showSnackbar = useSnackbarStore((s) => s.show);
 
   const [households, setHouseholds] = useState<HouseholdInfo[]>([]);
@@ -34,6 +35,10 @@ export default function ManageHouseholdScreen({
   const [createVisible, setCreateVisible] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Delete
+  const [deleteTarget, setDeleteTarget] = useState<HouseholdInfo | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Invite
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -106,6 +111,21 @@ export default function ManageHouseholdScreen({
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await leaveHousehold(deleteTarget.id);
+      setHouseholds((prev) => prev.filter((h) => h.id !== deleteTarget.id));
+      showSnackbar(t.cellarLeft, "success");
+      setDeleteTarget(null);
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleActivate = async (id: string) => {
     try {
       await setActiveHousehold(id);
@@ -120,9 +140,10 @@ export default function ManageHouseholdScreen({
     setGenerating(true);
     try {
       const code = await inviteService.createInvite(activeHouseholdId, user.uid);
+      analytics.track.inviteGenerated();
       setInviteCode(code);
-    } catch {
-      // ignore
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setGenerating(false);
     }
@@ -200,6 +221,15 @@ export default function ManageHouseholdScreen({
                     onPress={() => handleRenameOpen(h)}
                     style={styles.editIcon}
                   />
+                  {!isActive && (
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={20}
+                      color={colors.error}
+                      onPress={() => setDeleteTarget(h)}
+                      style={styles.editIcon}
+                    />
+                  )}
                 </View>
               </View>
             );
@@ -318,6 +348,30 @@ export default function ManageHouseholdScreen({
               textColor={colors.primary}
             >
               {t.saveName}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* ── Delete Dialog ── */}
+      <Portal>
+        <Dialog
+          visible={!!deleteTarget}
+          onDismiss={() => setDeleteTarget(null)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.leaveCellar}</Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ color: colors.textSecondary, textAlign: "right" }}>
+              {t.leaveCellarConfirm}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDeleteTarget(null)} textColor={colors.textSecondary}>
+              {t.cancel}
+            </Button>
+            <Button onPress={handleDelete} loading={deleting} textColor={colors.error}>
+              {t.leaveCellar}
             </Button>
           </Dialog.Actions>
         </Dialog>

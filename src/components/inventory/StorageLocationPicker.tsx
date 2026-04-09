@@ -12,6 +12,7 @@ import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import StorageGrid, { type SlotData } from "./StorageGrid";
 import type { AppInventoryItem, WineType } from "@/types/index";
+import { getItemSlots } from "@/types/index";
 
 interface StorageLocationPickerProps {
   visible: boolean;
@@ -74,17 +75,15 @@ export default function StorageLocationPicker({
     const result: Record<string, SlotData> = {};
     for (const item of inventoryItems) {
       if (item.id === excludeItemId) continue;
-      if (
-        item.storageUnitId === selectedUnit.id &&
-        item.storageRow !== undefined &&
-        item.storageCol !== undefined
-      ) {
-        const key = `${item.storageRow}-${item.storageCol}`;
-        result[key] = {
-          itemId: item.id,
-          wineName: item.wineName,
-          wineType: item.wineType as WineType,
-        };
+      for (const slot of getItemSlots(item)) {
+        if (slot.unitId === selectedUnit.id) {
+          const key = `${slot.row}-${slot.col}`;
+          result[key] = {
+            itemId: item.id,
+            wineName: item.wineName,
+            wineType: item.wineType as WineType,
+          };
+        }
       }
     }
     return result;
@@ -248,6 +247,8 @@ const styles = StyleSheet.create({
   gridContainer: {
     flex: 1,
     paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   unitTypeLabel: {
     color: colors.textSecondary,

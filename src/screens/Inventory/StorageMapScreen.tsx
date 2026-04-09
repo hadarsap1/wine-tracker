@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { View, ScrollView, StyleSheet } from "react-native";
-import { Searchbar, ActivityIndicator, Text, Button } from "react-native-paper";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, ScrollView, StyleSheet, Dimensions } from "react-native";
+import { Searchbar, ActivityIndicator, Text, Button, Portal, Dialog } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { useCellarStore } from "@stores/cellarStore";
+import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
-import { WineType } from "@/types/index";
+import { WineType, getItemSlots } from "@/types/index";
+import type { AppInventoryItem } from "@/types/index";
 import StorageGrid, { TYPE_COLORS, type SlotData } from "@components/inventory/StorageGrid";
 import type { StorageMapScreenProps } from "@navigation/types";
 
@@ -14,11 +16,16 @@ export default function StorageMapScreen({
   navigation,
 }: StorageMapScreenProps): React.ReactElement {
   const profile = useAuthStore((s) => s.profile);
-  const { items, loading: inventoryLoading, loadItems } = useInventoryStore();
+  const { items, loading: inventoryLoading, loadItems, openBottle } = useInventoryStore();
+  const showSnackbar = useSnackbarStore((s) => s.show);
   const { units, loading: cellarLoading, loadUnits } = useCellarStore();
 
   const [search, setSearch] = useState("");
   const [selectedUnitIdx, setSelectedUnitIdx] = useState(0);
+  const [slotItem, setSlotItem] = useState<AppInventoryItem | null>(null);
+  const [openBottleConfirm, setOpenBottleConfirm] = useState(false);
+  const [openingBottle, setOpeningBottle] = useState(false);
+  const [clickedSlot, setClickedSlot] = useState<{ unitId: string; row: number; col: number } | null>(null);
 
   const householdId = profile?.householdIds?.[0];
 
@@ -30,21 +37,26 @@ export default function StorageMapScreen({
 
   const selectedUnit = units[selectedUnitIdx];
 
+  const { width: screenWidth } = Dimensions.get('window');
+  const cellSize = useMemo(() => {
+    if (!selectedUnit) return 64;
+    const LABEL = 64;
+    const PADDING = 32;
+    const GAP = 3;
+    const available = screenWidth - PADDING - LABEL - GAP * (selectedUnit.cols - 1);
+    const size = Math.floor(available / selectedUnit.cols);
+    return Math.min(Math.max(size, 54), 90);
+  }, [screenWidth, selectedUnit?.cols]);
+
   const buildSlots = (): Record<string, SlotData> => {
     if (!selectedUnit) return {};
     const result: Record<string, SlotData> = {};
     for (const item of items) {
-      if (
-        item.storageUnitId === selectedUnit.id &&
-        item.storageRow !== undefined &&
-        item.storageCol !== undefined
-      ) {
-        const key = `${item.storageRow}-${item.storageCol}`;
-        result[key] = {
-          itemId: item.id,
-          wineName: item.wineName,
-          wineType: item.wineType as WineType,
-        };
+      for (const slot of getItemSlots(item)) {
+        if (slot.unitId === selectedUnit.id) {
+          const key = `${slot.row}-${slot.col}`;
+          result[key] = { itemId: item.id, wineName: item.wineName, wineType: item.wineType as WineType };
+        }
       }
     }
     return result;
@@ -57,7 +69,7 @@ export default function StorageMapScreen({
     const matches = items.filter(
       (item) =>
         item.wineName.toLowerCase().includes(trimmedSearch) &&
-        item.storageUnitId === selectedUnit.id
+        getItemSlots(item).some((s) => s.unitId === selectedUnit.id)
     );
     if (matches.length === 1) {
       highlightItemId = matches[0].id;
@@ -77,8 +89,23 @@ export default function StorageMapScreen({
     const slot = slots[key];
     if (!slot) return;
     const item = items.find((i) => i.id === slot.itemId);
-    if (item) {
-      navigation.navigate("WineDetail", { itemId: item.id, wineId: item.wineId });
+    if (item) setSlotItem(item);
+    setClickedSlot(selectedUnit ? { unitId: selectedUnit.id, row, col } : null);
+  };
+
+  const handleOpenBottle = async () => {
+    if (!slotItem || !householdId) return;
+    setOpeningBottle(true);
+    try {
+      await openBottle(householdId, slotItem.id, slotItem.wineId, slotItem.wineName, slotItem.wineType, clickedSlot ?? undefined);
+      setOpenBottleConfirm(false);
+      setSlotItem(null);
+      setClickedSlot(null);
+      showSnackbar(t.bottleOpened, "success");
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    } finally {
+      setOpeningBottle(false);
     }
   };
 
@@ -147,6 +174,7 @@ export default function StorageMapScreen({
             mode="view"
             highlightItemId={highlightItemId}
             onSlotPress={handleSlotPress}
+            cellSize={cellSize}
           />
 
           {/* Legend */}
@@ -169,6 +197,67 @@ export default function StorageMapScreen({
           )}
         </ScrollView>
       )}
+
+      {/* Slot detail dialog */}
+      <Portal>
+        <Dialog
+          visible={!!slotItem && !openBottleConfirm}
+          onDismiss={() => setSlotItem(null)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{slotItem?.wineName ?? ""}</Dialog.Title>
+          <Dialog.Content style={styles.dialogContent}>
+            <Text style={styles.dialogMeta}>
+              {slotItem ? (t.wineTypeLabels[slotItem.wineType as WineType] ?? slotItem.wineType) : ""}
+              {slotItem?.producerName ? `  ·  ${slotItem.producerName}` : ""}
+            </Text>
+            <Text style={styles.dialogQty}>
+              {slotItem?.quantity ?? 0} {t.quantity.toLowerCase()}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                if (slotItem) navigation.navigate("WineDetail", { itemId: slotItem.id, wineId: slotItem.wineId });
+                setSlotItem(null);
+              }}
+              textColor={colors.primary}
+              style={styles.dialogBtn}
+            >
+              {t.details}
+            </Button>
+            <Button
+              mode="contained"
+              buttonColor={colors.primary}
+              onPress={() => setOpenBottleConfirm(true)}
+              style={styles.dialogBtn}
+            >
+              {t.openBottle}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Open bottle confirm */}
+        <Dialog
+          visible={openBottleConfirm}
+          onDismiss={() => setOpenBottleConfirm(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.openBottleConfirm}</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogMeta}>{t.openBottleMsg}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setOpenBottleConfirm(false)} textColor={colors.textSecondary}>
+              {t.cancel}
+            </Button>
+            <Button onPress={handleOpenBottle} loading={openingBottle} textColor={colors.primary}>
+              {t.openBottle}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -204,6 +293,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     color: colors.text,
+    textAlign: "right",
   },
   tabsScroll: {
     maxHeight: 52,
@@ -223,6 +313,7 @@ const styles = StyleSheet.create({
   gridContent: {
     padding: 16,
     paddingBottom: 40,
+    alignItems: "center",
   },
   unitMeta: {
     color: colors.textSecondary,
@@ -250,5 +341,33 @@ const styles = StyleSheet.create({
   legendLabel: {
     color: colors.textSecondary,
     fontSize: 12,
+  },
+  dialog: {
+    backgroundColor: colors.card,
+  },
+  dialogTitle: {
+    color: colors.text,
+    textAlign: "right",
+  },
+  dialogContent: {
+    gap: 4,
+  },
+  dialogMeta: {
+    color: colors.textSecondary,
+    textAlign: "right",
+    fontSize: 13,
+  },
+  dialogQty: {
+    color: colors.gold,
+    textAlign: "right",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  dialogActions: {
+    gap: 8,
+  },
+  dialogBtn: {
+    flex: 1,
   },
 });

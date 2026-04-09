@@ -23,6 +23,7 @@ import VivinoBadge from "@components/inventory/VivinoBadge";
 import type { WineDetailScreenProps } from "@navigation/types";
 import { useCellarStore } from "@stores/cellarStore";
 import StorageGrid from "@components/inventory/StorageGrid";
+import { getItemSlots } from "@/types/index";
 import type { AppWine, VivinoData, WineType } from "@/types/index";
 
 export default function WineDetailScreen({
@@ -43,6 +44,7 @@ export default function WineDetailScreen({
   const vivinoFetchIdRef = useRef(0);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [openBottleDialogVisible, setOpenBottleDialogVisible] = useState(false);
+  const [slotPickerForOpen, setSlotPickerForOpen] = useState<{ unitId: string; row: number; col: number } | null | undefined>(undefined);
   const [arrivedDialogVisible, setArrivedDialogVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [manualVivinoVisible, setManualVivinoVisible] = useState(false);
@@ -119,8 +121,24 @@ export default function WineDetailScreen({
   const handleDelete = async () => {
     if (!householdId) return;
     setDeleteDialogVisible(false);
-    await deleteItem(householdId, itemId);
-    navigation.goBack();
+    try {
+      await deleteItem(householdId, itemId);
+      navigation.goBack();
+    } catch (e) {
+      showSnackbar((e as Error).message || t.error, "error");
+    }
+  };
+
+  const handleOpenBottlePress = () => {
+    if (!item) return;
+    const slots = getItemSlots(item);
+    if (slots.length <= 1) {
+      setSlotPickerForOpen(slots[0] ?? null);
+      setOpenBottleDialogVisible(true);
+    } else {
+      setSlotPickerForOpen(undefined);
+      setOpenBottleDialogVisible(true);
+    }
   };
 
   const handleOpenBottle = async () => {
@@ -128,7 +146,7 @@ export default function WineDetailScreen({
     setOpenBottleDialogVisible(false);
     setActionLoading(true);
     try {
-      await openBottle(householdId, itemId, item.wineId, item.wineName, item.wineType);
+      await openBottle(householdId, itemId, item.wineId, item.wineName, item.wineType, slotPickerForOpen ?? undefined);
       showSnackbar(t.bottleOpened, "success");
       navigation.goBack();
     } catch (e) {
@@ -277,41 +295,31 @@ export default function WineDetailScreen({
         )}
         {wine?.grape && <DetailRow label={t.grape} value={wine.grape} />}
         {item.location && <DetailRow label={t.location} value={item.location} />}
-        {item.storageUnitId !== undefined &&
-          item.storageRow !== undefined &&
-          item.storageCol !== undefined &&
-          (() => {
-            const unit = cellarUnits.find((u) => u.id === item.storageUnitId);
+        {(() => {
+          const itemSlots = getItemSlots(item);
+          if (itemSlots.length === 0) return null;
+          const byUnit = new Map<string, typeof itemSlots>();
+          for (const s of itemSlots) {
+            if (!byUnit.has(s.unitId)) byUnit.set(s.unitId, []);
+            byUnit.get(s.unitId)!.push(s);
+          }
+          return Array.from(byUnit.entries()).map(([unitId, unitSlots]) => {
+            const unit = cellarUnits.find((u) => u.id === unitId);
             if (!unit) return null;
-            const slotKey = `${item.storageRow}-${item.storageCol}`;
-            const miniSlots: Record<
-              string,
-              { itemId: string; wineName: string; wineType: WineType }
-            > = {
-              [slotKey]: {
-                itemId: item.id,
-                wineName: item.wineName,
-                wineType: item.wineType as WineType,
-              },
-            };
-            // Populate other items sharing the same unit
+            const miniSlots: Record<string, { itemId: string; wineName: string; wineType: WineType }> = {};
+            for (const s of unitSlots) {
+              miniSlots[`${s.row}-${s.col}`] = { itemId: item.id, wineName: item.wineName, wineType: item.wineType as WineType };
+            }
             for (const other of items) {
-              if (
-                other.id !== item.id &&
-                other.storageUnitId === unit.id &&
-                other.storageRow !== undefined &&
-                other.storageCol !== undefined
-              ) {
-                const key = `${other.storageRow}-${other.storageCol}`;
-                miniSlots[key] = {
-                  itemId: other.id,
-                  wineName: other.wineName,
-                  wineType: other.wineType as WineType,
-                };
+              if (other.id === item.id) continue;
+              for (const s of getItemSlots(other)) {
+                if (s.unitId === unitId) {
+                  miniSlots[`${s.row}-${s.col}`] = { itemId: other.id, wineName: other.wineName, wineType: other.wineType as WineType };
+                }
               }
             }
             return (
-              <View style={styles.miniMapSection}>
+              <View key={unitId} style={styles.miniMapSection}>
                 <Text variant="labelLarge" style={styles.sectionLabel}>
                   {t.storageLocation} — {unit.name}
                 </Text>
@@ -324,7 +332,8 @@ export default function WineDetailScreen({
                 />
               </View>
             );
-          })()}
+          });
+        })()}
         {item.purchasePrice != null && (
           <DetailRow
             label={t.purchasePrice}
@@ -350,7 +359,7 @@ export default function WineDetailScreen({
         ) : (
           <Button
             mode="contained"
-            onPress={() => setOpenBottleDialogVisible(true)}
+            onPress={handleOpenBottlePress}
             style={styles.editButton}
             buttonColor={colors.primary}
             loading={actionLoading}
@@ -385,11 +394,33 @@ export default function WineDetailScreen({
         >
           <Dialog.Title style={styles.dialogTitle}>{t.openBottleConfirm}</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium" style={styles.dialogText}>{t.openBottleMsg}</Text>
+            {getItemSlots(item).length > 1 && slotPickerForOpen === undefined ? (
+              <View style={{ gap: 8 }}>
+                <Text variant="bodyMedium" style={styles.dialogText}>{t.whichSlotOpened}</Text>
+                {getItemSlots(item).map((s, idx) => {
+                  const unit = cellarUnits.find((u) => u.id === s.unitId);
+                  return (
+                    <Button
+                      key={idx}
+                      mode="outlined"
+                      onPress={() => setSlotPickerForOpen(s)}
+                      textColor={colors.primary}
+                      style={{ borderColor: colors.border }}
+                    >
+                      {unit?.name ?? s.unitId} — {s.row + 1}/{s.col + 1}
+                    </Button>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text variant="bodyMedium" style={styles.dialogText}>{t.openBottleMsg}</Text>
+            )}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setOpenBottleDialogVisible(false)} textColor={colors.textSecondary}>{t.cancel}</Button>
-            <Button onPress={handleOpenBottle} textColor={colors.primary}>{t.openBottle}</Button>
+            {(getItemSlots(item).length <= 1 || slotPickerForOpen !== undefined) && (
+              <Button onPress={handleOpenBottle} textColor={colors.primary}>{t.openBottle}</Button>
+            )}
           </Dialog.Actions>
         </Dialog>
       </Portal>

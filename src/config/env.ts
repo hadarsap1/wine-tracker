@@ -12,11 +12,8 @@ export const env = {
     appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '',
   },
 
-  // Google Cloud Vision API (OCR for wine labels & receipts)
-  googleCloudVisionApiKey: process.env.EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY ?? '',
-
-  // OpenAI API (LLM receipt parsing)
-  openaiApiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? '',
+  // PostHog product analytics (https://posthog.com → Project Settings → Project API Key)
+  posthogApiKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? '',
 
   // App public URL (used for invite links etc.)
   appUrl: process.env.EXPO_PUBLIC_APP_URL ?? 'https://wine-tracker.web.app',

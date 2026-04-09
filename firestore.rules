@@ -149,6 +149,20 @@ service cloud.firestore {
         allow delete: if isMember(householdId);
       }
 
+      // ── /households/{householdId}/storageUnits/{unitId} ──────────────
+
+      match /storageUnits/{unitId} {
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId)
+          && isValidString(incomingData().name)
+          && incomingData().type in ['fridge', 'rack']
+          && incomingData().rows is int && incomingData().rows >= 1 && incomingData().rows <= 20
+          && incomingData().cols is int && incomingData().cols >= 1 && incomingData().cols <= 20;
+        allow update: if isMember(householdId)
+          && isValidString(incomingData().name);
+        allow delete: if isMember(householdId);
+      }
+
       // ── /households/{householdId}/receipts/{receiptId} ────────────────
 
       match /receipts/{receiptId} {
@@ -167,23 +181,26 @@ service cloud.firestore {
     }
 
     // ── /invites/{inviteId} ───────────────────────────────────────────────
-    // Any signed-in user can read an invite (to validate the code).
+    // Any signed-in user can fetch a specific invite by ID (to validate the code).
+    // Collection listing is blocked — prevents enumerating household IDs.
     // Only household admins can create invites.
     // Redemption (marking used + adding member) is handled via a write
     // that any signed-in user can do to their own invite doc.
 
     match /invites/{inviteId} {
-      allow read: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if false;
 
-      allow create: if isSignedIn()
+      allow create: if isAdmin(incomingData().householdId)
         && isValidString(incomingData().householdId)
         && incomingData().createdBy == request.auth.uid
         && incomingData().used == false;
 
-      // Allow the redeemer to mark the invite as used
+      // Allow the redeemer to mark the invite as used — only the `used` field may change
       allow update: if isSignedIn()
         && resource.data.used == false
-        && incomingData().used == true;
+        && incomingData().used == true
+        && incomingData().diff(resource.data).affectedKeys().hasOnly(['used']);
 
       allow delete: if false;
     }

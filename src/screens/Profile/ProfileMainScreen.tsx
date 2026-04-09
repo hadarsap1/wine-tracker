@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { View, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Platform, View, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import { Text, Button, Dialog, Portal } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import * as householdService from "@services/household";
@@ -22,6 +22,31 @@ export default function ProfileMainScreen({
   const [wineTypeDialogVisible, setWineTypeDialogVisible] = useState(false);
   const [currencyDialogVisible, setCurrencyDialogVisible] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [installDialogVisible, setInstallDialogVisible] = useState(false);
+  const deferredInstallPrompt = useRef<any>(null);
+  const isStandalone =
+    Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    window.matchMedia("(display-mode: standalone)").matches;
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredInstallPrompt.current = e;
+    };
+    window.addEventListener("beforeinstallprompt", handler as EventListener);
+    return () => window.removeEventListener("beforeinstallprompt", handler as EventListener);
+  }, []);
+
+  const handleInstall = () => {
+    if (deferredInstallPrompt.current) {
+      deferredInstallPrompt.current.prompt();
+      deferredInstallPrompt.current = null;
+    } else {
+      setInstallDialogVisible(true);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -156,6 +181,13 @@ export default function ProfileMainScreen({
         label={t.help}
         onPress={() => navigation.navigate("Help")}
       />
+      {Platform.OS === "web" && !isStandalone && (
+        <SettingsRow
+          icon="cellphone-arrow-down"
+          label={t.installApp}
+          onPress={handleInstall}
+        />
+      )}
       <SettingsRow
         icon="logout"
         label={t.signOut}
@@ -166,6 +198,36 @@ export default function ProfileMainScreen({
       <Text variant="bodySmall" style={styles.version}>
         {t.appVersion}
       </Text>
+
+      {/* Install App Dialog */}
+      <Portal>
+        <Dialog
+          visible={installDialogVisible}
+          onDismiss={() => setInstallDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.installApp}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="labelMedium" style={[styles.dialogText, styles.dialogTextRtl, { marginBottom: 8 }]}>
+              {t.installAppIosTitle}
+            </Text>
+            <Text variant="bodySmall" style={[styles.dialogText, styles.dialogTextRtl, { marginBottom: 16 }]}>
+              {t.installAppIosMsg}
+            </Text>
+            <Text variant="labelMedium" style={[styles.dialogText, styles.dialogTextRtl, { marginBottom: 8 }]}>
+              {t.installAppAndroidTitle}
+            </Text>
+            <Text variant="bodySmall" style={[styles.dialogText, styles.dialogTextRtl]}>
+              {t.installAppAndroidMsg}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button onPress={() => setInstallDialogVisible(false)} textColor={colors.primary}>
+              {t.cancel}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Sign Out Dialog */}
       <Portal>
@@ -306,6 +368,13 @@ const styles = StyleSheet.create({
   },
   dialogText: {
     color: colors.textSecondary,
+  },
+  dialogTextRtl: {
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  dialogActions: {
+    justifyContent: "flex-start",
   },
   wineTypeButton: {
     marginVertical: 2,

@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginStart: 12,
     maxWidth: 140,
-    textAlign: "left",
+    textAlign: "right",
   },
   chevron: {
     marginStart: 6,

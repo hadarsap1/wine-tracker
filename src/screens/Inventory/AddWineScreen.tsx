@@ -156,9 +156,7 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
           purchasePrice: purchasePrice
             ? parseFloat(purchasePrice) || undefined
             : undefined,
-          storageUnitId: selectedSlot?.unitId,
-          storageRow: selectedSlot?.row,
-          storageCol: selectedSlot?.col,
+          storageSlots: selectedSlot ? [{ unitId: selectedSlot.unitId, row: selectedSlot.row, col: selectedSlot.col }] : undefined,
         }
       );
       navigation.goBack();
@@ -327,7 +325,7 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
         <View style={styles.slotRow}>
           <Text style={styles.slotValue}>
             {selectedSlot
-              ? `${selectedSlot.unitName} — ${t.storageUnitRows} ${selectedSlot.row + 1}, ${t.storageUnitCols} ${selectedSlot.col + 1}`
+              ? `${selectedSlot.unitName} — ${t.storageRow} ${selectedSlot.row + 1}, ${t.storageCol} ${selectedSlot.col + 1}`
               : t.slotEmpty}
           </Text>
           {selectedSlot && (
@@ -427,7 +425,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   typeScrollContent: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
   },
   statusButtons: {
     marginBottom: 16,

@@ -81,20 +81,16 @@ export default function DiaryListScreen({
             icon="book-open-variant"
             title={t.diaryEmpty}
             subtitle={t.diaryEmptySubtitle}
-            actionLabel={t.addFirstEntry}
-            onAction={() => navigation.navigate("AddEntry")}
           />
         }
       />
-      {entries.length > 0 && (
-        <FAB
-          icon="plus"
-          style={styles.fab}
-          onPress={() => navigation.navigate("AddEntry")}
-          color={colors.onPrimary}
-          customSize={56}
-        />
-      )}
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => navigation.navigate("AddEntry")}
+        color={colors.onPrimary}
+        customSize={56}
+      />
     </View>
   );
 }
@@ -118,6 +114,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     color: colors.text,
+    textAlign: "right",
   },
   list: {
     paddingVertical: 8,

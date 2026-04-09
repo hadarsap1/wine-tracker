@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as diaryService from "@services/diary";
 import { deleteImage } from "@services/storage";
 import type { AppDiaryEntry } from "@/types/index";
+import * as analytics from "@services/analytics";
 
 interface DiaryState {
   entries: AppDiaryEntry[];
@@ -53,6 +54,11 @@ export const useDiaryStore = create<DiaryStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await diaryService.createDiaryEntry(householdId, entryId, data);
+      analytics.track.diaryEntryCreated({
+        hasRating: data.rating != null,
+        hasNotes: !!data.notes?.trim(),
+        photoCount: data.imageUrls?.length ?? 0,
+      });
       await get().loadEntries(householdId);
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
@@ -83,6 +89,7 @@ export const useDiaryStore = create<DiaryStore>((set, get) => ({
         await Promise.all(entry.imageUrls.map((url) => deleteImage(url)));
       }
       await diaryService.deleteDiaryEntry(householdId, entryId);
+      analytics.track.diaryEntryDeleted();
       set((state) => ({
         entries: state.entries.filter((e) => e.id !== entryId),
       }));

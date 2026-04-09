@@ -1,7 +1,38 @@
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 
 admin.initializeApp();
+
+// ── Secrets (stored in Firebase Secret Manager, never in app binary) ──────────
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
+const visionApiKey = defineSecret('GOOGLE_CLOUD_VISION_API_KEY');
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// 50 scan calls per user per calendar day (UTC), shared across all scan functions.
+const SCAN_DAILY_LIMIT = 50;
+
+async function checkScanRateLimit(userId: string): Promise<boolean> {
+  const db = admin.firestore();
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  const ref = db.collection('rateLimits').doc(userId);
+
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const data = doc.data();
+    if (!data || data.scanDate !== today) {
+      tx.set(ref, { scanDate: today, scanCount: 1 });
+      return true;
+    }
+    if ((data.scanCount as number) >= SCAN_DAILY_LIMIT) {
+      return false;
+    }
+    tx.update(ref, { scanCount: admin.firestore.FieldValue.increment(1) });
+    return true;
+  });
+}
+
+// ── Vivino helpers ─────────────────────────────────────────────────────────────
 
 interface VivinoProxyRequest {
   query: string;
@@ -236,5 +267,216 @@ export const vivinoProxy = onCall<VivinoProxyRequest, Promise<VivinoProxyRespons
     } catch {
       return null;
     }
+  }
+);
+
+// ── detectLabelText (Google Cloud Vision OCR) ─────────────────────────────────
+
+interface DetectTextRequest {
+  imageBase64: string;
+}
+
+interface DetectTextResponse {
+  fullText: string;
+  locale: string;
+  error?: string;
+}
+
+/**
+ * Runs Google Cloud Vision TEXT_DETECTION on a base64-encoded image.
+ * API key is stored as a Cloud Secret — never sent to the client.
+ */
+export const detectLabelText = onCall<DetectTextRequest, Promise<DetectTextResponse>>(
+  { cors: true, timeoutSeconds: 30, secrets: [visionApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { imageBase64 } = request.data;
+    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
+      throw new HttpsError('invalid-argument', 'imageBase64 is required.');
+    }
+
+    const allowed = await checkScanRateLimit(request.auth.uid);
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'Daily scan limit reached. Try again tomorrow.');
+    }
+
+    const apiKey = visionApiKey.value();
+    if (!apiKey) {
+      return { fullText: '', locale: '', error: 'Vision API not configured on server.' };
+    }
+
+    const body = {
+      requests: [
+        {
+          image: { content: imageBase64 },
+          features: [{ type: 'TEXT_DETECTION' }],
+        },
+      ],
+    };
+
+    const res = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      return { fullText: '', locale: '', error: `Vision API error: ${res.status} ${errorText}` };
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const responses = data.responses as Record<string, unknown>[] | undefined;
+    const annotations = responses?.[0]?.textAnnotations as Record<string, unknown>[] | undefined;
+
+    if (!annotations || annotations.length === 0) {
+      return { fullText: '', locale: '', error: 'No text detected in image' };
+    }
+
+    return {
+      fullText: (annotations[0].description as string) ?? '',
+      locale: (annotations[0].locale as string) ?? '',
+    };
+  }
+);
+
+// ── analyzeLabel (OpenAI GPT-4o Vision) ───────────────────────────────────────
+
+const AI_WINE_TYPE_MAP: Record<string, string> = {
+  red: 'Red',
+  white: 'White',
+  'rosé': 'Rosé',
+  rose: 'Rosé',
+  sparkling: 'Sparkling',
+  dessert: 'Dessert',
+  fortified: 'Fortified',
+  orange: 'Orange',
+  other: 'Other',
+};
+
+interface AnalyzeLabelRequest {
+  imageBase64: string;
+}
+
+interface AnalyzeLabelResponse {
+  name?: string;
+  producer?: string;
+  type?: string;
+  vintage?: number;
+  grape?: string;
+  region?: string;
+  country?: string;
+}
+
+/**
+ * Analyzes a wine label image using GPT-4o Vision.
+ * OpenAI API key is stored as a Cloud Secret — never sent to the client.
+ */
+export const analyzeLabel = onCall<AnalyzeLabelRequest, Promise<AnalyzeLabelResponse>>(
+  { cors: true, timeoutSeconds: 30, secrets: [openaiApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { imageBase64 } = request.data;
+    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
+      throw new HttpsError('invalid-argument', 'imageBase64 is required.');
+    }
+
+    const allowed = await checkScanRateLimit(request.auth.uid);
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'Daily scan limit reached. Try again tomorrow.');
+    }
+
+    const apiKey = openaiApiKey.value();
+    if (!apiKey) {
+      throw new HttpsError('unavailable', 'AI analysis not configured on server.');
+    }
+
+    const body = {
+      model: 'gpt-4o',
+      max_tokens: 400,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+                detail: 'low',
+              },
+            },
+            {
+              type: 'text',
+              text: `You are a wine label reader. Extract information from this wine bottle label image.
+Return ONLY a valid JSON object — no markdown, no explanation:
+{
+  "name": "wine range/cuvée name (not the winery name)",
+  "producer": "winery or producer name",
+  "type": "red" | "white" | "rosé" | "sparkling" | "dessert" | "fortified" | "orange" | "other",
+  "vintage": <4-digit year as integer, or null>,
+  "grape": "primary grape variety or blend",
+  "region": "wine appellation or region",
+  "country": "country of origin"
+}
+Use null for any field you cannot determine from the label.`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new HttpsError('internal', `OpenAI API error: ${res.status}`);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const choices = data.choices as Record<string, unknown>[] | undefined;
+    const content = (choices?.[0]?.message as Record<string, unknown>)?.content as string ?? '';
+
+    const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    } catch {
+      throw new HttpsError('internal', 'Failed to parse AI response as JSON');
+    }
+
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() && v.toLowerCase() !== 'null' ? v.trim() : undefined;
+
+    const vintage = typeof parsed.vintage === 'number' && parsed.vintage > 1900
+      ? parsed.vintage
+      : undefined;
+
+    const typeRaw = typeof parsed.type === 'string' ? parsed.type.toLowerCase() : '';
+    const type = AI_WINE_TYPE_MAP[typeRaw];
+
+    return {
+      name: str(parsed.name),
+      producer: str(parsed.producer),
+      type,
+      vintage,
+      grape: str(parsed.grape),
+      region: str(parsed.region),
+      country: str(parsed.country),
+    };
   }
 );

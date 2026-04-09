@@ -9,11 +9,11 @@ import {
 import { Button, Text } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "@config/theme";
-import { env } from "@config/env";
 import { t } from "@i18n/index";
-import { detectText } from "@services/vision";
+import { detectText, analyzeLabelWithAI } from "@services/vision";
 import { parseLabelText } from "@/utils/parseLabelText";
 import { useSnackbarStore } from "@stores/snackbarStore";
+import * as analytics from "@services/analytics";
 import type { ScanMainScreenProps } from "@navigation/types";
 
 export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
@@ -25,22 +25,41 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
     setImageUri(uri);
     setProcessing(true);
     try {
+      // Prefer AI-powered analysis (GPT-4o Vision) when available on server
+      try {
+        const parsedData = await analyzeLabelWithAI(uri);
+        analytics.track.scanCompleted('ai', parsedData.confidence ?? 'low');
+        navigation.navigate("ScanReview", {
+          parsedData,
+          imageUri: uri,
+          rawText: "",
+        });
+        return;
+      } catch {
+        // AI not configured on server or failed — fall through to Vision API + regex fallback
+      }
+
+      // Fallback: Google Cloud Vision + regex parser
       const { fullText, error } = await detectText(uri);
       if (error) {
+        analytics.track.scanFailed(error);
         showSnackbar(error, "error");
         return;
       }
       if (!fullText.trim()) {
+        analytics.track.scanFailed('no_text_detected');
         showSnackbar(t.noTextFoundMsg, "error");
         return;
       }
       const parsedData = parseLabelText(fullText);
+      analytics.track.scanCompleted('vision', parsedData.confidence ?? 'low');
       navigation.navigate("ScanReview", {
         parsedData,
         imageUri: uri,
         rawText: fullText,
       });
     } catch (e: unknown) {
+      analytics.track.scanFailed((e as Error).message ?? 'unknown_error');
       showSnackbar((e as Error).message ?? t.scanError, "error");
     } finally {
       setProcessing(false);
@@ -84,19 +103,6 @@ export default function ScanMainScreen({ navigation }: ScanMainScreenProps) {
       await processImage(result.assets[0].uri);
     }
   };
-
-  if (!env.googleCloudVisionApiKey) {
-    return (
-      <View style={styles.container}>
-        <Text variant="headlineSmall" style={styles.title}>
-          {t.scanUnavailable}
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          {t.scanUnavailableMsg}
-        </Text>
-      </View>
-    );
-  }
 
   if (processing && imageUri) {
     return (

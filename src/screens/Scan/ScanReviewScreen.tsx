@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: -8,
     marginBottom: 8,
-    marginRight: 4,
+    marginEnd: 4,
     textAlign: "right",
   },
   submitButton: {

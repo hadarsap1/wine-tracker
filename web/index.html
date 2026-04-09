@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+
+    <title>יומן יין</title>
+    <meta name="description" content="עקוב אחר אוסף היין שלך ויומן הטעימות" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1a1a2e" />
+
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="יומן יין" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+
+    <!-- Splash screen color while loading -->
+    <meta name="msapplication-TileColor" content="#1a1a2e" />
+    <meta name="msapplication-TileImage" content="/icon.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" />
+
+    <!-- App shell styles -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+        background-color: #1a1a2e;
+        margin: 0;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+
+    <!-- Service Worker registration — must run before the app bundle -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then(function (reg) {
+              // Check for SW updates on each page load
+              reg.update();
+            })
+            .catch(function (err) {
+              console.warn('Service worker registration failed:', err);
+            });
+        });
+      }
+    </script>
+
+    <!-- Expo injects the bundle script tag here -->
+  </body>
+</html>

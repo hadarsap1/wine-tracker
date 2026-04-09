@@ -3,6 +3,13 @@ import { getAuth, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
+// App Check (production setup):
+//   Firebase JS SDK does not include native attestation providers for React Native.
+//   To enable App Check on iOS/Android, add @react-native-firebase/app-check and
+//   configure DeviceCheck (iOS) / Play Integrity (Android), then call initializeAppCheck()
+//   here and enable enforcement per-service in Firebase Console → App Check.
+//   Until then, rate limiting in Cloud Functions (detectLabelText, analyzeLabel)
+//   guards the most expensive operations.
 import { Platform } from 'react-native';
 import { env } from './env';
 

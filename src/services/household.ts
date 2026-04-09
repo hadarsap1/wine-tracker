@@ -4,6 +4,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
@@ -65,6 +66,14 @@ export async function createPersonalHousehold(
   await setDoc(memberRef, member);
 
   return householdId;
+}
+
+export async function leaveHousehold(
+  householdId: string,
+  uid: string
+): Promise<void> {
+  const memberRef = doc(db, COLLECTIONS.households, householdId, COLLECTIONS.members, uid);
+  await deleteDoc(memberRef);
 }
 
 export async function getHousehold(

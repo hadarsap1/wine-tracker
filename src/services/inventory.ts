@@ -12,6 +12,7 @@ import {
   writeBatch,
   increment,
   deleteField,
+  arrayRemove,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
 import {
@@ -24,6 +25,7 @@ import {
   type CreateInventoryItem,
   type WineType,
   type Rating,
+  type StorageSlot,
 } from "@/types/index";
 
 function winesCol(householdId: string) {
@@ -56,6 +58,8 @@ export interface InventoryFormData {
   status?: InventoryStatus;
   location?: string;
   purchasePrice?: number;
+  storageSlots?: StorageSlot[];
+  // legacy single-slot fields (kept for old callers):
   storageUnitId?: string;
   storageRow?: number;
   storageCol?: number;
@@ -101,6 +105,7 @@ export async function createWineWithInventory(
   if (inventoryData.storageUnitId) item.storageUnitId = inventoryData.storageUnitId;
   if (inventoryData.storageRow !== undefined) item.storageRow = inventoryData.storageRow;
   if (inventoryData.storageCol !== undefined) item.storageCol = inventoryData.storageCol;
+  if (inventoryData.storageSlots?.length) item.storageSlots = inventoryData.storageSlots;
   batch.set(itemRef, item);
 
   await batch.commit();
@@ -169,6 +174,9 @@ export async function updateInventoryItem(
       | "storageUnitId"
       | "storageRow"
       | "storageCol"
+      | "storageSlots"
+      | "wineName"
+      | "wineType"
     >
   >
 ): Promise<void> {
@@ -179,7 +187,25 @@ export async function updateInventoryItem(
     COLLECTIONS.inventoryItems,
     itemId
   );
-  await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+  const OPTIONAL_ITEM_FIELDS = ["location", "purchasePrice", "storageUnitId", "storageRow", "storageCol"] as const;
+  const updates: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (data.quantity !== undefined) updates.quantity = data.quantity;
+  if (data.status !== undefined) updates.status = data.status;
+  if (data.wineName !== undefined) updates.wineName = data.wineName;
+  if (data.wineType !== undefined) updates.wineType = data.wineType;
+  for (const field of OPTIONAL_ITEM_FIELDS) {
+    if (field in data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updates[field] = (data as any)[field] === undefined ? deleteField() : (data as any)[field];
+    }
+  }
+  if ('storageSlots' in data) {
+    updates['storageSlots'] =
+      (data as { storageSlots?: StorageSlot[] }).storageSlots === undefined
+        ? deleteField()
+        : (data as { storageSlots?: StorageSlot[] }).storageSlots;
+  }
+  await updateDoc(ref, updates);
 }
 
 const OPTIONAL_WINE_FIELDS = [
@@ -263,7 +289,8 @@ export async function openBottle(
   householdId: string,
   itemId: string,
   currentQuantity: number,
-  diary: { entryId: string; wineId: string; wineName: string; wineType: WineType }
+  diary: { entryId: string; wineId: string; wineName: string; wineType: WineType },
+  slotToRemove?: StorageSlot
 ): Promise<boolean> {
   const batch = writeBatch(db);
 
@@ -279,7 +306,16 @@ export async function openBottle(
   if (deleted) {
     batch.delete(itemRef);
   } else {
-    batch.update(itemRef, { quantity: increment(-1), updatedAt: serverTimestamp() });
+    const updateData: Record<string, unknown> = { quantity: increment(-1), updatedAt: serverTimestamp() };
+    if (slotToRemove) {
+      // Remove from new storageSlots array
+      updateData.storageSlots = arrayRemove(slotToRemove);
+      // Also clear legacy single-slot fields if this was the slot
+      updateData.storageUnitId = deleteField();
+      updateData.storageRow = deleteField();
+      updateData.storageCol = deleteField();
+    }
+    batch.update(itemRef, updateData);
   }
 
   const diaryRef = doc(

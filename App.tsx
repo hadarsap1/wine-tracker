@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { I18nManager, Platform, View } from "react-native";
 import * as Font from "expo-font";
 import { paperTheme, navigationTheme } from "@config/theme";
@@ -10,6 +10,7 @@ import { useAuthStore } from "@stores/authStore";
 import { validateEnv } from "@config/env";
 import { RootNavigator } from "@navigation/index";
 import GlobalSnackbar from "@components/common/GlobalSnackbar";
+import * as analytics from "@services/analytics";
 
 // Force RTL for Hebrew
 I18nManager.allowRTL(true);
@@ -19,6 +20,12 @@ I18nManager.forceRTL(true);
 if (Platform.OS === "web" && typeof document !== "undefined") {
   document.documentElement.setAttribute("dir", "rtl");
   document.documentElement.setAttribute("lang", "he");
+
+  // react-native-web's I18nManager is a no-op (forceRTL does nothing, isRTL always false).
+  // Patch the singleton so react-native-paper's internal RTL checks return true,
+  // fixing floating label positions and other RTL layout in TextInput, etc.
+  (I18nManager as unknown as Record<string, unknown>).isRTL = true;
+  (I18nManager as unknown as Record<string, unknown>).getConstants = () => ({ isRTL: true });
 }
 
 if (__DEV__) {
@@ -43,6 +50,8 @@ function AppContent() {
 }
 
 export default function App() {
+  const navigationRef = useNavigationContainerRef();
+  const routeNameRef = useRef<string | undefined>(undefined);
   const [fontsReady, setFontsReady] = useState(Platform.OS !== "web");
 
   useEffect(() => {
@@ -81,7 +90,20 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <PaperProvider theme={paperTheme}>
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer
+          ref={navigationRef}
+          theme={navigationTheme}
+          onReady={() => {
+            routeNameRef.current = navigationRef.getCurrentRoute()?.name;
+          }}
+          onStateChange={() => {
+            const current = navigationRef.getCurrentRoute()?.name;
+            if (current && current !== routeNameRef.current) {
+              analytics.screenView(current);
+              routeNameRef.current = current;
+            }
+          }}
+        >
           <AppContent />
           <GlobalSnackbar />
           <StatusBar style="light" />

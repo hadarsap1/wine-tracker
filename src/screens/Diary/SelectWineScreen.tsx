@@ -215,6 +215,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     color: colors.text,
+    textAlign: "right",
   },
   loader: {
     marginTop: 32,
@@ -260,6 +261,6 @@ const styles = StyleSheet.create({
   wineName: {
     color: colors.text,
     flex: 1,
-    marginLeft: 12,
+    marginStart: 12,
   },
 });

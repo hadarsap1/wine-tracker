@@ -137,6 +137,12 @@ export type InventoryStatus = "in_stock" | "on_the_way";
 
 export type StorageUnitType = "fridge" | "rack";
 
+export interface StorageSlot {
+  unitId: string;
+  row: number;
+  col: number;
+}
+
 export interface StorageUnit extends FirestoreDoc {
   name: string;
   type: StorageUnitType;
@@ -160,6 +166,18 @@ export interface InventoryItem extends FirestoreDoc {
   storageUnitId?: string;
   storageRow?: number;
   storageCol?: number;
+  storageSlots?: StorageSlot[];
+}
+
+/** Returns all storage slots for an item, with backward-compat for old single-slot fields. */
+export function getItemSlots(
+  item: Pick<InventoryItem, 'storageSlots' | 'storageUnitId' | 'storageRow' | 'storageCol'>
+): StorageSlot[] {
+  if (item.storageSlots?.length) return item.storageSlots;
+  if (item.storageUnitId && item.storageRow !== undefined && item.storageCol !== undefined) {
+    return [{ unitId: item.storageUnitId, row: item.storageRow, col: item.storageCol }];
+  }
+  return [];
 }
 
 export interface DiaryEntry extends FirestoreDoc {

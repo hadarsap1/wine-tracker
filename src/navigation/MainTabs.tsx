@@ -39,6 +39,15 @@ export default function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          height: 60,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: {
+          paddingBottom: 0,
+          marginBottom: 0,
+        },
+        tabBarItemStyle: {
+          overflow: "visible",
         },
       })}
     >

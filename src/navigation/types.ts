@@ -30,6 +30,7 @@ export type InventoryStackParamList = {
   ImportOrder: undefined;
   ImportOrderReview: { items: ParsedOrderItem[]; rawText: string };
   StorageMap: undefined;
+  ImportExcel: undefined;
 };
 
 export type DiaryStackParamList = {
@@ -86,6 +87,7 @@ export type WineDetailScreenProps = NativeStackScreenProps<InventoryStackParamLi
 export type EditWineScreenProps = NativeStackScreenProps<InventoryStackParamList, "EditWine">;
 export type ImportOrderScreenProps = NativeStackScreenProps<InventoryStackParamList, "ImportOrder">;
 export type ImportOrderReviewScreenProps = NativeStackScreenProps<InventoryStackParamList, "ImportOrderReview">;
+export type ImportExcelScreenProps = NativeStackScreenProps<InventoryStackParamList, "ImportExcel">;
 
 export type DiaryListScreenProps = CompositeScreenProps<
   NativeStackScreenProps<DiaryStackParamList, "DiaryList">,

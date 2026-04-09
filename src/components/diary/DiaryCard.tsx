@@ -63,7 +63,7 @@ export default function DiaryCard({ entry, onPress }: DiaryCardProps): React.Rea
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 12,
