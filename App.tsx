@@ -23,9 +23,27 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 
   // react-native-web's I18nManager is a no-op (forceRTL does nothing, isRTL always false).
   // Patch the singleton so react-native-paper's internal RTL checks return true,
-  // fixing floating label positions and other RTL layout in TextInput, etc.
+  // fixing label animation direction and other RTL layout in TextInput.
   (I18nManager as unknown as Record<string, unknown>).isRTL = true;
   (I18nManager as unknown as Record<string, unknown>).getConstants = () => ({ isRTL: true });
+
+  // react-native-paper's TextInput label uses `position: absolute; left: 0` (physical CSS,
+  // not logical), so dir="rtl" alone doesn't flip it. We target the label elements by their
+  // default testID ("text-input-flat") which react-native-web renders as data-testid.
+  // :has() selects the width-constrained parent div and pushes it to the right edge.
+  const rtlStyle = document.createElement("style");
+  rtlStyle.textContent = `
+    html[dir="rtl"] [data-testid="text-input-flat-label-active"],
+    html[dir="rtl"] [data-testid="text-input-flat-label-inactive"] {
+      left: auto !important;
+      right: 0 !important;
+      text-align: right !important;
+    }
+    html[dir="rtl"] div:has(> [data-testid="text-input-flat-label-active"]) {
+      margin-left: auto !important;
+    }
+  `;
+  document.head.appendChild(rtlStyle);
 }
 
 if (__DEV__) {
