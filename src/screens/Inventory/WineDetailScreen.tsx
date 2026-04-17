@@ -74,7 +74,10 @@ export default function WineDetailScreen({
         const cached = w.vivinoData;
         const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
         const searchUrl = `https://www.vivino.com/search/wines?q=${encodeURIComponent(w.name)}`;
-        if (cached && cached.fetchedAt.toMillis() > sevenDaysAgo) {
+        const cachedMillis = typeof cached?.fetchedAt?.toMillis === 'function'
+          ? cached.fetchedAt.toMillis()
+          : ((cached?.fetchedAt as unknown as { seconds?: number })?.seconds ?? 0) * 1000;
+        if (cached && cachedMillis > sevenDaysAgo) {
           setVivinoData({ ...cached, wineUrl: cached.wineUrl ?? searchUrl });
         } else {
           const fetchId = ++vivinoFetchIdRef.current;
@@ -109,7 +112,7 @@ export default function WineDetailScreen({
 
   const handleQuantityChange = async (delta: number) => {
     if (!householdId || !item || quantityLoading) return;
-    const newQty = Math.max(0, item.quantity + delta);
+    const newQty = Math.max(1, item.quantity + delta);
     setQuantityLoading(true);
     try {
       await updateItem(householdId, itemId, { quantity: newQty });
@@ -265,7 +268,11 @@ export default function WineDetailScreen({
       {/* Vivino Rating */}
       {(loadingVivino || vivinoData !== undefined) && (
         <View style={styles.vivinoSection}>
-          <VivinoBadge data={vivinoData} loading={loadingVivino} />
+          <VivinoBadge
+            data={vivinoData}
+            loading={loadingVivino}
+            searchUrl={wine ? `https://www.vivino.com/search/wines?q=${encodeURIComponent(wine.name)}` : undefined}
+          />
           {vivinoData === null && !loadingVivino && (
             <Button
               mode="outlined"
@@ -284,7 +291,7 @@ export default function WineDetailScreen({
       {/* Wine Details */}
       <View style={styles.detailsSection}>
         <Text variant="titleMedium" style={styles.sectionLabel}>
-          {t.stackTitles.wineDetail}
+          {t.wineDetails}
         </Text>
         <Divider style={styles.sectionDivider} />
         {wine?.producer && <DetailRow label={t.producer} value={wine.producer} />}
@@ -337,7 +344,7 @@ export default function WineDetailScreen({
         {item.purchasePrice != null && (
           <DetailRow
             label={t.purchasePrice}
-            value={`$${item.purchasePrice.toFixed(2)}`}
+            value={`${profile?.preferences?.currency ?? "₪"}${item.purchasePrice.toFixed(2)}`}
           />
         )}
         {wine?.notes && <DetailRow label={t.notes} value={wine.notes} />}

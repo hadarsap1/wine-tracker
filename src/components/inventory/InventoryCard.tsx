@@ -29,14 +29,14 @@ export default function InventoryCard({ item, onPress }: InventoryCardProps): Re
             <WineTypeChip type={item.wineType} compact />
             {item.location ? (
               <View style={styles.locationRow}>
+                <Text variant="bodySmall" style={styles.locationText} numberOfLines={1}>
+                  {item.location}
+                </Text>
                 <MaterialCommunityIcons
                   name="map-marker"
                   size={12}
                   color={colors.textSecondary}
                 />
-                <Text variant="bodySmall" style={styles.locationText} numberOfLines={1}>
-                  {item.location}
-                </Text>
               </View>
             ) : null}
           </View>
@@ -93,9 +93,10 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   locationRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 4,
+    alignSelf: "flex-start",
   },
   locationText: {
     color: colors.textSecondary,

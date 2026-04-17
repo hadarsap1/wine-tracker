@@ -8,13 +8,16 @@ import {
   Image,
   Pressable,
 } from "react-native";
-import { TextInput, Button, SegmentedButtons, Text } from "react-native-paper";
+import { TextInput, Button, SegmentedButtons, Text, Dialog, Portal } from "react-native-paper";
+import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import * as vivinoService from "@services/vivino";
 import * as storageService from "@services/storage";
 import * as inventoryService from "@services/inventory";
+import { analyzeLabelWithAI, detectText } from "@services/vision";
+import { parseLabelText } from "@/utils/parseLabelText";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
@@ -32,7 +35,7 @@ const WINE_TYPE_BUTTONS = WINE_TYPES.map((type) => ({
 const CONFIDENCE_COLORS: Record<string, string> = {
   high: "#1b5e36",
   medium: "#7a5c00",
-  low: "#3a3a4a",
+  low: "#555570",
 };
 
 export default function ScanReviewScreen({
@@ -65,10 +68,13 @@ export default function ScanReviewScreen({
   const [pickerVisible, setPickerVisible] = useState(false);
   const [notes, setNotes] = useState("");
   const [nameError, setNameError] = useState("");
+  const [quantityError, setQuantityError] = useState("");
   const [showRawText, setShowRawText] = useState(false);
+  const [saveConfirmVisible, setSaveConfirmVisible] = useState(false);
   const [vivinoData, setVivinoData] = useState<VivinoData | null | undefined>(undefined);
   const [loadingVivino, setLoadingVivino] = useState(false);
   const vivinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scanningBack, setScanningBack] = useState(false);
 
   const householdId = profile?.householdIds?.[0];
 
@@ -131,13 +137,79 @@ export default function ScanReviewScreen({
     };
   }, [name, producer, vintage]);
 
-  const handleSave = async () => {
+  const handleScanBack = async () => {
+    let uri: string | null = null;
+
+    if (Platform.OS === "web") {
+      const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8, allowsEditing: false, mediaTypes: ["images"] });
+      if (result.canceled || !result.assets[0]) return;
+      uri = result.assets[0].uri;
+    } else {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        showSnackbar(t.cameraPermissionMsg, "info");
+        const galleryResult = await ImagePicker.launchImageLibraryAsync({ quality: 0.8, allowsEditing: false, mediaTypes: ["images"] });
+        if (galleryResult.canceled || !galleryResult.assets[0]) return;
+        uri = galleryResult.assets[0].uri;
+      } else {
+        const cameraResult = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
+        if (cameraResult.canceled || !cameraResult.assets[0]) return;
+        uri = cameraResult.assets[0].uri;
+      }
+    }
+
+    setScanningBack(true);
+    try {
+      let backData;
+      try {
+        backData = await analyzeLabelWithAI(uri);
+      } catch {
+        const { fullText, error: ocrError } = await detectText(uri);
+        if (ocrError) throw new Error(ocrError);
+        backData = parseLabelText(fullText);
+      }
+
+      // Merge: only fill fields that are currently empty
+      let filled = 0;
+      if (!name.trim() && backData.name)     { setName(backData.name);               filled++; }
+      if (!producer.trim() && backData.producer) { setProducer(backData.producer);   filled++; }
+      if (!vintage.trim() && backData.vintage)   { setVintage(String(backData.vintage)); filled++; }
+      if (!grape.trim() && backData.grape)   { setGrape(backData.grape);             filled++; }
+      if (!region.trim() && backData.region) { setRegion(backData.region);           filled++; }
+      if (!country.trim() && backData.country) { setCountry(backData.country);       filled++; }
+
+      showSnackbar(
+        filled > 0 ? t.backScanFilled(filled) : t.backScanNoNew,
+        filled > 0 ? "success" : "info",
+      );
+    } catch {
+      showSnackbar(t.scanError, "error");
+    } finally {
+      setScanningBack(false);
+    }
+  };
+
+  const handleSave = () => {
     if (!name.trim()) {
       setNameError(t.wineNameRequired);
       return;
     }
     const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty < 1) return;
+    if (isNaN(qty) || qty < 1) {
+      setQuantityError(t.invalidQuantityMsg);
+      return;
+    }
+    if (parsedData.confidence === "low") {
+      setSaveConfirmVisible(true);
+      return;
+    }
+    void doSave();
+  };
+
+  const doSave = async () => {
+    if (saving) return;
+    setSaveConfirmVisible(false);
+    const qty = parseInt(quantity, 10);
     if (!householdId) {
       showSnackbar(t.noHousehold, "error");
       return;
@@ -168,20 +240,21 @@ export default function ScanReviewScreen({
           storageCol: selectedSlot?.col,
         }
       );
-      // Upload scanned label image to Storage (non-blocking — best-effort)
-      if (imageUri && !imageUri.startsWith("https://")) {
-        try {
-          const path = storageService.wineLabelPath(householdId, wineId);
-          const downloadUrl = await storageService.uploadImage(imageUri, path);
-          await inventoryService.updateWine(householdId, wineId, { imageUrl: downloadUrl });
-        } catch {
-          // Image upload is best-effort; wine was saved successfully
-        }
-      }
       showSnackbar(t.addedToCellar, "success");
       navigation.popToTop();
+      // Upload label image in background after navigation (best-effort)
+      if (imageUri && !imageUri.startsWith("https://")) {
+        storageService.uploadImage(imageUri, storageService.wineLabelPath(householdId, wineId))
+          .then((downloadUrl) =>
+            inventoryService.updateWine(householdId, wineId, { imageUrl: downloadUrl })
+          )
+          .catch((uploadErr) => {
+            console.warn('[ScanReview] label image upload failed:', uploadErr);
+          });
+      }
     } catch (e) {
-      showSnackbar((e as Error).message || t.failedToCreateWine, "error");
+      console.error('[ScanReview] save failed:', e);
+      showSnackbar(t.failedToCreateWine, "error");
     } finally {
       setSaving(false);
     }
@@ -212,7 +285,11 @@ export default function ScanReviewScreen({
         {/* Vivino Rating */}
         {(loadingVivino || vivinoData !== undefined) && (
           <View style={styles.vivinoRow}>
-            <VivinoBadge data={vivinoData} loading={loadingVivino} />
+            <VivinoBadge
+              data={vivinoData}
+              loading={loadingVivino}
+              searchUrl={name.trim().length >= 3 ? `https://www.vivino.com/search/wines?q=${encodeURIComponent(name.trim())}` : undefined}
+            />
             {vivinoData?.wineName && (
               <Text variant="labelSmall" style={styles.vivinoMatchName}>
                 {t.vivinoMatched}: {vivinoData.wineName}
@@ -233,21 +310,37 @@ export default function ScanReviewScreen({
           </View>
         )}
 
-        {/* Photo Thumbnail */}
+        {/* Photo Thumbnail + back-scan button */}
         <Image source={{ uri: imageUri }} style={styles.thumbnail} />
+        <Button
+          mode="outlined"
+          onPress={() => void handleScanBack()}
+          loading={scanningBack}
+          disabled={scanningBack}
+          icon="camera-flip-outline"
+          textColor={colors.textSecondary}
+          style={styles.scanBackButton}
+          compact
+        >
+          {t.scanBackLabel}
+        </Button>
 
-        {/* Raw OCR Text Toggle */}
-        <Pressable onPress={() => setShowRawText(!showRawText)}>
-          <Text variant="labelMedium" style={styles.rawTextToggle}>
-            {showRawText ? t.hideRawText : t.showRawText}
-          </Text>
-        </Pressable>
-        {showRawText && (
-          <View style={styles.rawTextBox}>
-            <Text variant="bodySmall" style={styles.rawText}>
-              {rawText}
-            </Text>
-          </View>
+        {/* Raw OCR Text Toggle — only shown when there is actual text */}
+        {rawText.trim().length > 0 && (
+          <>
+            <Pressable onPress={() => setShowRawText(!showRawText)}>
+              <Text variant="labelMedium" style={styles.rawTextToggle}>
+                {showRawText ? t.hideRawText : t.showRawText}
+              </Text>
+            </Pressable>
+            {showRawText && (
+              <View style={styles.rawTextBox}>
+                <Text variant="bodySmall" style={styles.rawText}>
+                  {rawText}
+                </Text>
+              </View>
+            )}
+          </>
         )}
 
         {/* Form Fields */}
@@ -274,7 +367,7 @@ export default function ScanReviewScreen({
         </Text>
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={false}
+          showsHorizontalScrollIndicator={Platform.OS === "web"}
           style={styles.typeScroll}
         >
           <SegmentedButtons
@@ -336,7 +429,11 @@ export default function ScanReviewScreen({
           <TextInput
             label={t.quantity}
             value={quantity}
-            onChangeText={setQuantity}
+            onChangeText={(v) => {
+              setQuantity(v);
+              if (quantityError) setQuantityError("");
+            }}
+            error={!!quantityError}
             keyboardType="numeric"
             style={[styles.input, styles.flex]}
             contentStyle={styles.inputContent}
@@ -353,6 +450,11 @@ export default function ScanReviewScreen({
             textColor={colors.text}
           />
         </View>
+        {quantityError ? (
+          <Text variant="labelSmall" style={styles.errorText}>
+            {quantityError}
+          </Text>
+        ) : null}
         {/* Storage slot picker */}
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {t.storageLocation}
@@ -360,7 +462,7 @@ export default function ScanReviewScreen({
         <View style={styles.slotRow}>
           <Text style={styles.slotValue}>
             {selectedSlot
-              ? `${selectedSlot.unitName} — ${t.storageUnitRows} ${selectedSlot.row + 1}, ${t.storageUnitCols} ${selectedSlot.col + 1}`
+              ? `${selectedSlot.unitName} — ${t.storageRow} ${selectedSlot.row + 1}, ${t.storageCol} ${selectedSlot.col + 1}`
               : t.slotEmpty}
           </Text>
           {selectedSlot && (
@@ -399,13 +501,30 @@ export default function ScanReviewScreen({
           mode="contained"
           onPress={handleSave}
           loading={saving}
-          disabled={saving}
+          disabled={saving || scanningBack}
           style={styles.submitButton}
           buttonColor={colors.primary}
         >
           {t.saveToCellar}
         </Button>
       </ScrollView>
+
+      <Portal>
+        <Dialog
+          visible={saveConfirmVisible}
+          onDismiss={() => setSaveConfirmVisible(false)}
+          style={{ backgroundColor: colors.card }}
+        >
+          <Dialog.Title style={{ color: colors.text }}>{t.lowConfidenceSaveTitle}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={{ color: colors.textSecondary }}>{t.lowConfidenceSaveMsg}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setSaveConfirmVisible(false)} textColor={colors.textSecondary}>{t.cancel}</Button>
+            <Button onPress={() => void doSave()} textColor={colors.primary}>{t.saveToCellar}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       <StorageLocationPicker
         visible={pickerVisible}
@@ -470,6 +589,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
     resizeMode: "cover",
+  },
+  scanBackButton: {
+    alignSelf: "flex-end",
+    marginBottom: 12,
+    borderColor: colors.border,
   },
   rawTextToggle: {
     color: colors.primary,

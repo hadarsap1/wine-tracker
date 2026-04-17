@@ -160,13 +160,16 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       const item = get().items.find((i) => i.id === itemId);
       const qty = item?.quantity ?? 1;
       const entryId = diaryService.generateEntryId(householdId);
+      // Legacy items use storageUnitId/storageRow/storageCol instead of storageSlots[]
+      const isLegacySlot = !!slotToRemove && !item?.storageSlots?.length;
 
       const deleted = await inventoryService.openBottle(
         householdId,
         itemId,
         qty,
         { entryId, wineId, wineName, wineType },
-        slotToRemove
+        slotToRemove,
+        isLegacySlot
       );
       analytics.track.bottleOpened();
 

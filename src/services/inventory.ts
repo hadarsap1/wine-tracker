@@ -290,7 +290,9 @@ export async function openBottle(
   itemId: string,
   currentQuantity: number,
   diary: { entryId: string; wineId: string; wineName: string; wineType: WineType },
-  slotToRemove?: StorageSlot
+  slotToRemove?: StorageSlot,
+  /** Pass true when the item uses legacy storageUnitId/storageRow/storageCol fields (not storageSlots[]) */
+  isLegacySlot?: boolean
 ): Promise<boolean> {
   const batch = writeBatch(db);
 
@@ -308,12 +310,15 @@ export async function openBottle(
   } else {
     const updateData: Record<string, unknown> = { quantity: increment(-1), updatedAt: serverTimestamp() };
     if (slotToRemove) {
-      // Remove from new storageSlots array
-      updateData.storageSlots = arrayRemove(slotToRemove);
-      // Also clear legacy single-slot fields if this was the slot
-      updateData.storageUnitId = deleteField();
-      updateData.storageRow = deleteField();
-      updateData.storageCol = deleteField();
+      if (isLegacySlot) {
+        // Legacy single-slot item: clear the individual fields
+        updateData.storageUnitId = deleteField();
+        updateData.storageRow = deleteField();
+        updateData.storageCol = deleteField();
+      } else {
+        // New storageSlots[] format: remove just this slot from the array
+        updateData.storageSlots = arrayRemove(slotToRemove);
+      }
     }
     batch.update(itemRef, updateData);
   }
