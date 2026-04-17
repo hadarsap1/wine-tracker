@@ -22,7 +22,7 @@ function extractVintage(text: string): number | undefined {
   // Pick the most likely wine vintage (not a future year, prefer recent)
   const valid = matches
     .map(Number)
-    .filter((y) => y >= 1900 && y <= currentYear)
+    .filter((y) => y >= 1950 && y <= currentYear)
     .sort((a, b) => b - a);
   return valid[0];
 }
@@ -30,6 +30,17 @@ function extractVintage(text: string): number | undefined {
 // ─── Wine Type ───────────────────────────────────────────────────────────────
 
 const TYPE_KEYWORDS: Record<string, WineType> = {
+  // Hebrew
+  "יין אדום": WineType.Red,
+  "יין לבן": WineType.White,
+  "יין רוזה": WineType.Rosé,
+  "יין מבעבע": WineType.Sparkling,
+  "יין קינוח": WineType.Dessert,
+  "יין מועשר": WineType.Fortified,
+  "לבן": WineType.White,
+  "אדום": WineType.Red,
+  "רוזה": WineType.Rosé,
+  "מבעבע": WineType.Sparkling,
   // English
   sparkling: WineType.Sparkling,
   champagne: WineType.Sparkling,
@@ -49,7 +60,7 @@ const TYPE_KEYWORDS: Record<string, WineType> = {
   sherry: WineType.Fortified,
   madeira: WineType.Fortified,
   marsala: WineType.Fortified,
-  orange: WineType.Orange,
+  "orange wine": WineType.Orange,
   white: WineType.White,
   blanc: WineType.White,
   bianco: WineType.White,
@@ -143,7 +154,9 @@ const COUNTRIES: Record<string, string[]> = {
   Germany: ["mosel", "rheingau", "pfalz", "baden"],
   Portugal: ["douro", "alentejo", "dão", "dao", "vinho verde"],
   "South Africa": ["stellenbosch", "franschhoek", "paarl", "swartland"],
-  Israel: ["galilee", "golan heights", "golan", "judean hills", "negev", "shomron", "samson"],
+  Israel: ["galilee", "golan heights", "golan", "judean hills", "negev", "shomron", "samson",
+           "upper galilee", "lower galilee", "galileo", "dalton", "tzfat",
+           "גליל", "גולן", "שומרון", "שמשון", "נגב"],
 };
 
 function extractCountryRegion(text: string): { country?: string; region?: string } {
@@ -190,28 +203,59 @@ const NOISE_PATTERNS = [
   /^(family\s+)?(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina)\b/i, // winery boilerplate lines
   /contain[s]?\s+sulph/i,        // "contains sulphites"
   /^(produce[d]?|bottled|mis en bouteille)/i, // production notes
-  /^\p{Script=Hebrew}/u,         // Hebrew text (not a wine name/producer)
+  /^(reserve|réserve|gran reserva|reserva|special|premium|select|edition|limited)\s*$/i, // standalone quality tier descriptors
+  /^\p{Script=Hebrew}/u,         // Hebrew text (not a wine name/producer) — see exception in isNoiseLine
 ];
 
+// Hebrew words that signal a line is a winery/vineyard name worth keeping
+const HEBREW_PRODUCER_RE = /כרם|יקב|יינות/;
+
 function isNoiseLine(line: string): boolean {
-  return NOISE_PATTERNS.some((re) => re.test(line.trim()));
+  const trimmed = line.trim();
+  // Hebrew lines with winery/vineyard keywords are producers — don't discard them
+  if (/^\p{Script=Hebrew}/u.test(trimmed) && HEBREW_PRODUCER_RE.test(trimmed)) {
+    return false;
+  }
+  return NOISE_PATTERNS.some((re) => re.test(trimmed));
 }
 
 // Words that suggest a line is a winery/producer, not a wine range name
-const PRODUCER_HINT_RE = /\b(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina|family|distillery)\b/i;
+const PRODUCER_HINT_RE = /\b(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina|family|distillery)\b|כרם|יקב|יינות/i;
 
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
+// If OCR splits a producer name across lines (e.g. "MILES" / "WINERY"),
+// merge adjacent lines where the second looks like a winery suffix.
+const WINERY_SUFFIX_RE = /^(winery|winer|cellars?|vineyards?|estate|chateau|domaine|bodega|cantina)\b/i;
+
+function mergeProducerLines(lines: string[]): string[] {
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const next = lines[i + 1];
+    if (next && WINERY_SUFFIX_RE.test(next.trim())) {
+      result.push(`${lines[i]} ${next}`);
+      i += 2;
+    } else {
+      result.push(lines[i]);
+      i++;
+    }
+  }
+  return result;
 }
 
 function extractNameAndProducer(
   text: string,
   usedTerms: string[]
 ): { name?: string; producer?: string } {
-  const lines = text
+  const rawLines = text
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 1);
+
+  const lines = mergeProducerLines(rawLines);
 
   const usedLower = usedTerms.map((t) => t.toLowerCase());
   const unusedLines = lines.filter((line) => {
@@ -233,6 +277,21 @@ function extractNameAndProducer(
   const producerCandidates = unusedLines.filter(
     (l) => wordCount(l) > 3 || PRODUCER_HINT_RE.test(l)
   );
+
+  // When all candidates are producer-hints (no plain wine name found),
+  // OR all name candidates are short single-word fragments (likely OCR noise),
+  // prefer the Hebrew/estate line as producer and use the branded winery name as the wine name.
+  const allFragments =
+    nameCandidates.length > 0 &&
+    nameCandidates.every((l) => wordCount(l) === 1 && l.length <= 6);
+
+  if ((nameCandidates.length === 0 || allFragments) && producerCandidates.length > 0) {
+    const hebrewLine = producerCandidates.find((l) => /\p{Script=Hebrew}/u.test(l));
+    if (hebrewLine) {
+      const brandLine = producerCandidates.find((l) => l !== hebrewLine) ?? unusedLines[0];
+      return { name: brandLine, producer: hebrewLine };
+    }
+  }
 
   // Prefer the shortest name candidate as the wine name
   const name =
@@ -259,6 +318,7 @@ export function calcConfidence(data: Omit<ParsedLabelData, "confidence">): Parse
 // ─── Main Parser ─────────────────────────────────────────────────────────────
 
 export function parseLabelText(rawText: string): ParsedLabelData {
+  if (!rawText?.trim()) return { confidence: "low" };
   const usedTerms: string[] = [];
 
   const vintage = extractVintage(rawText);
@@ -271,6 +331,7 @@ export function parseLabelText(rawText: string): ParsedLabelData {
   const type = extractType(rawText) ?? (grape ? GRAPE_TO_TYPE[grape] : undefined);
 
   const { country, region } = extractCountryRegion(rawText);
+  if (country) usedTerms.push(country.toLowerCase());
   if (region) usedTerms.push(region);
 
   const { name, producer } = extractNameAndProducer(rawText, usedTerms);

@@ -9,8 +9,8 @@ const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const visionApiKey = defineSecret('GOOGLE_CLOUD_VISION_API_KEY');
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-// 50 scan calls per user per calendar day (UTC), shared across all scan functions.
-const SCAN_DAILY_LIMIT = 50;
+// 500 AI scan calls per user per calendar day (UTC). Only applied to analyzeLabel (GPT-4o).
+const SCAN_DAILY_LIMIT = 500;
 
 async function checkScanRateLimit(userId: string): Promise<boolean> {
   const db = admin.firestore();
@@ -118,12 +118,18 @@ async function searchWines(query: string): Promise<VivinoProxyResponse | null> {
   const url = `https://www.vivino.com/api/wines/search?q=${q}&language=en&mini=true`;
 
   const res = await fetch(url, { headers: VIVINO_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(`[vivino] searchWines HTTP ${res.status} for query="${query}"`);
+    return null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const json = await res.json() as any;
   const wines = json?.wines;
-  if (!Array.isArray(wines) || wines.length === 0) return null;
+  if (!Array.isArray(wines) || wines.length === 0) {
+    console.warn(`[vivino] searchWines: no wines array for query="${query}". top-level keys=${Object.keys(json ?? {}).join(',')}`);
+    return null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wine = bestMatch(query, wines as any[], (w: any) => w?.name);
@@ -164,12 +170,18 @@ async function exploreWines(query: string, vintage?: number): Promise<VivinoProx
   const url = `https://www.vivino.com/api/explore/explore?q=${q}&price_range_max=500&price_range_min=0`;
 
   const res = await fetch(url, { headers: VIVINO_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(`[vivino] exploreWines HTTP ${res.status} for query="${query}"`);
+    return null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const root = await res.json() as any;
   const matches: unknown[] | undefined = root?.explore_vintage?.matches;
-  if (!matches || matches.length === 0) return null;
+  if (!matches || matches.length === 0) {
+    console.warn(`[vivino] exploreWines: no matches for query="${query}". top-level keys=${Object.keys(root ?? {}).join(',')}`);
+    return null;
+  }
 
   // If a vintage is given, prefer that year's match but keep all candidates for scoring
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -263,8 +275,12 @@ export const vivinoProxy = onCall<VivinoProxyRequest, Promise<VivinoProxyRespons
     }
 
     try {
-      return await searchWithStrategies(query.trim(), vintage);
-    } catch {
+      console.log(`[vivino] searching: query="${query}" vintage=${vintage ?? 'none'}`);
+      const result = await searchWithStrategies(query.trim(), vintage);
+      console.log(`[vivino] result: ${result ? `score=${result.score} name=${result.wineName}` : 'null (not found)'}`);
+      return result;
+    } catch (e) {
+      console.error(`[vivino] searchWithStrategies threw:`, e);
       return null;
     }
   }
@@ -298,11 +314,6 @@ export const detectLabelText = onCall<DetectTextRequest, Promise<DetectTextRespo
       throw new HttpsError('invalid-argument', 'imageBase64 is required.');
     }
 
-    const allowed = await checkScanRateLimit(request.auth.uid);
-    if (!allowed) {
-      throw new HttpsError('resource-exhausted', 'Daily scan limit reached. Try again tomorrow.');
-    }
-
     const apiKey = visionApiKey.value();
     if (!apiKey) {
       return { fullText: '', locale: '', error: 'Vision API not configured on server.' };
@@ -328,7 +339,12 @@ export const detectLabelText = onCall<DetectTextRequest, Promise<DetectTextRespo
 
     if (!res.ok) {
       const errorText = await res.text();
-      return { fullText: '', locale: '', error: `Vision API error: ${res.status} ${errorText}` };
+      // Log full details server-side only — never expose raw API responses to clients
+      console.error(`Vision API error ${res.status}: ${errorText}`);
+      if (res.status === 400 || res.status === 403) {
+        return { fullText: '', locale: '', error: 'vision_key_invalid' };
+      }
+      return { fullText: '', locale: '', error: 'vision_api_error' };
     }
 
     const data = await res.json() as Record<string, unknown>;
@@ -372,6 +388,7 @@ interface AnalyzeLabelResponse {
   grape?: string;
   region?: string;
   country?: string;
+  vivinoQuery?: string;
 }
 
 /**
@@ -381,12 +398,18 @@ interface AnalyzeLabelResponse {
 export const analyzeLabel = onCall<AnalyzeLabelRequest, Promise<AnalyzeLabelResponse>>(
   { cors: true, timeoutSeconds: 30, secrets: [openaiApiKey] },
   async (request) => {
+    console.log(`analyzeLabel: invoked. auth=${!!request.auth}`);
+
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
     const { imageBase64 } = request.data;
+    const b64Len = typeof imageBase64 === 'string' ? imageBase64.length : -1;
+    console.log(`analyzeLabel: imageBase64 type=${typeof imageBase64} length=${b64Len}`);
+
     if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
+      console.error(`analyzeLabel: imageBase64 validation failed. type=${typeof imageBase64} length=${b64Len}`);
       throw new HttpsError('invalid-argument', 'imageBase64 is required.');
     }
 
@@ -397,8 +420,10 @@ export const analyzeLabel = onCall<AnalyzeLabelRequest, Promise<AnalyzeLabelResp
 
     const apiKey = openaiApiKey.value();
     if (!apiKey) {
+      console.error('analyzeLabel: OPENAI_API_KEY secret is empty or not loaded. Secret name: OPENAI_API_KEY, length: 0');
       throw new HttpsError('unavailable', 'AI analysis not configured on server.');
     }
+    console.log(`analyzeLabel: API key loaded (length=${apiKey.length}), sending to OpenAI...`);
 
     const body = {
       model: 'gpt-4o',
@@ -444,6 +469,8 @@ Use null for any field you cannot determine from the label.`,
     });
 
     if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.error(`OpenAI API error ${res.status}: ${errBody}`);
       throw new HttpsError('internal', `OpenAI API error: ${res.status}`);
     }
 
@@ -456,6 +483,7 @@ Use null for any field you cannot determine from the label.`,
     try {
       parsed = JSON.parse(jsonStr) as Record<string, unknown>;
     } catch {
+      console.error(`Failed to parse AI response as JSON. Raw content: ${content}`);
       throw new HttpsError('internal', 'Failed to parse AI response as JSON');
     }
 

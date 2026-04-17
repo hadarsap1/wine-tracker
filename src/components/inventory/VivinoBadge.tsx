@@ -9,13 +9,15 @@ import type { VivinoData } from "@/types/index";
 interface Props {
   data: VivinoData | null | undefined;
   loading?: boolean;
+  /** Vivino search URL to open when data is null (not found). */
+  searchUrl?: string;
 }
 
 /**
  * Displays a Vivino score badge. Shows a loading spinner while fetching,
  * nothing if not found, or a styled score card once data is available.
  */
-export default function VivinoBadge({ data, loading }: Props) {
+export default function VivinoBadge({ data, loading, searchUrl }: Props) {
   if (loading) {
     return (
       <View style={styles.container}>
@@ -29,14 +31,28 @@ export default function VivinoBadge({ data, loading }: Props) {
 
   // data === undefined means "not yet fetched"; data === null means "searched, not found"
   if (data === null) {
-    return (
+    const notFoundContent = (
       <View style={styles.container}>
-        <MaterialCommunityIcons name="information-outline" size={14} color={colors.textSecondary} />
-        <Text variant="labelSmall" style={styles.label}>
+        <View style={styles.logoMark}>
+          <Text style={styles.logoText}>V</Text>
+        </View>
+        <Text variant="labelSmall" style={[styles.label, searchUrl && styles.labelLink]}>
           {t.vivinoNotFound}
         </Text>
+        {searchUrl && (
+          <MaterialCommunityIcons name="open-in-new" size={14} color={colors.primary} />
+        )}
       </View>
     );
+
+    if (searchUrl) {
+      return (
+        <Pressable onPress={() => Linking.openURL(searchUrl)}>
+          {notFoundContent}
+        </Pressable>
+      );
+    }
+    return notFoundContent;
   }
 
   if (data === undefined) return null;
@@ -77,7 +93,7 @@ export default function VivinoBadge({ data, loading }: Props) {
 
   if (data.wineUrl) {
     return (
-      <Pressable onPress={() => Linking.openURL(data.wineUrl!)}>
+      <Pressable onPress={() => data.wineUrl && Linking.openURL(data.wineUrl)}>
         {badgeContent}
       </Pressable>
     );
@@ -97,6 +113,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: "right",
   },
+  labelLink: {
+    color: colors.primary,
+  },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -109,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   badgeTappable: {
-    borderColor: "#9b1c31",
+    borderColor: colors.vivinoRed,
   },
   info: {
     flex: 1,
@@ -121,7 +140,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#9b1c31",
+    backgroundColor: colors.vivinoRed,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -138,6 +157,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     gap: 4,
+    direction: "ltr", // numeric ratings always read left-to-right even in RTL UI
   },
   score: {
     color: colors.text,

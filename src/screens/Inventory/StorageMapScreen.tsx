@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, ScrollView, StyleSheet, Dimensions } from "react-native";
 import { Searchbar, ActivityIndicator, Text, Button, Portal, Dialog } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
@@ -11,6 +11,7 @@ import { WineType, getItemSlots } from "@/types/index";
 import type { AppInventoryItem } from "@/types/index";
 import StorageGrid, { TYPE_COLORS, type SlotData } from "@components/inventory/StorageGrid";
 import type { StorageMapScreenProps } from "@navigation/types";
+import * as inventoryService from "@services/inventory";
 
 export default function StorageMapScreen({
   navigation,
@@ -23,9 +24,12 @@ export default function StorageMapScreen({
   const [search, setSearch] = useState("");
   const [selectedUnitIdx, setSelectedUnitIdx] = useState(0);
   const [slotItem, setSlotItem] = useState<AppInventoryItem | null>(null);
+  const [slotVivinoScore, setSlotVivinoScore] = useState<number | null | undefined>(undefined);
   const [openBottleConfirm, setOpenBottleConfirm] = useState(false);
   const [openingBottle, setOpeningBottle] = useState(false);
   const [clickedSlot, setClickedSlot] = useState<{ unitId: string; row: number; col: number } | null>(null);
+  const [wineImages, setWineImages] = useState<Record<string, string>>({});
+  const loadedWineIds = useRef(new Set<string>());
 
   const householdId = profile?.householdIds?.[0];
 
@@ -33,7 +37,17 @@ export default function StorageMapScreen({
     if (!householdId) return;
     loadItems(householdId);
     loadUnits(householdId);
+    // Reset image cache on household change
+    loadedWineIds.current.clear();
+    setWineImages({});
   }, [householdId, loadItems, loadUnits]);
+
+  // Clamp selectedUnitIdx when units change (e.g. unit deleted)
+  useEffect(() => {
+    if (units.length > 0 && selectedUnitIdx >= units.length) {
+      setSelectedUnitIdx(Math.max(0, units.length - 1));
+    }
+  }, [units, selectedUnitIdx]);
 
   const selectedUnit = units[selectedUnitIdx];
 
@@ -48,19 +62,49 @@ export default function StorageMapScreen({
     return Math.min(Math.max(size, 54), 90);
   }, [screenWidth, selectedUnit?.cols]);
 
-  const buildSlots = (): Record<string, SlotData> => {
+  // Load wine imageUrls for all slotted items
+  useEffect(() => {
+    if (!householdId) return;
+    const slottedItems = items.filter((i) => getItemSlots(i).length > 0);
+    const toLoad = slottedItems
+      .map((i) => i.wineId)
+      .filter((id) => !loadedWineIds.current.has(id));
+    if (toLoad.length === 0) return;
+    toLoad.forEach((id) => loadedWineIds.current.add(id));
+    Promise.all(
+      toLoad.map((wineId) =>
+        inventoryService
+          .getWine(householdId, wineId)
+          .then((wine) => (wine?.imageUrl ? { wineId, url: wine.imageUrl } : null))
+          .catch(() => null)
+      )
+    ).then((results) => {
+      const next: Record<string, string> = {};
+      for (const r of results) {
+        if (r) next[r.wineId] = r.url;
+      }
+      if (Object.keys(next).length > 0) setWineImages((prev) => ({ ...prev, ...next }));
+    });
+  }, [householdId, items]);
+
+  const buildSlots = useMemo((): Record<string, SlotData> => {
     if (!selectedUnit) return {};
     const result: Record<string, SlotData> = {};
     for (const item of items) {
       for (const slot of getItemSlots(item)) {
         if (slot.unitId === selectedUnit.id) {
           const key = `${slot.row}-${slot.col}`;
-          result[key] = { itemId: item.id, wineName: item.wineName, wineType: item.wineType as WineType };
+          result[key] = {
+            itemId: item.id,
+            wineName: item.wineName,
+            wineType: item.wineType as WineType,
+            imageUrl: wineImages[item.wineId],
+          };
         }
       }
     }
     return result;
-  };
+  }, [selectedUnit, items, wineImages]);
 
   // Find highlighted item based on search
   const trimmedSearch = search.trim().toLowerCase();
@@ -76,7 +120,7 @@ export default function StorageMapScreen({
     }
   }
 
-  const slots = buildSlots();
+  const slots = buildSlots;
 
   // Legend: wine types present in this unit
   const presentTypes = new Set<WineType>();
@@ -89,7 +133,15 @@ export default function StorageMapScreen({
     const slot = slots[key];
     if (!slot) return;
     const item = items.find((i) => i.id === slot.itemId);
-    if (item) setSlotItem(item);
+    if (item) {
+      setSlotItem(item);
+      setSlotVivinoScore(undefined); // loading
+      if (householdId) {
+        inventoryService.getWine(householdId, item.wineId).then((wine) => {
+          setSlotVivinoScore(wine?.vivinoData?.score ?? null);
+        }).catch(() => setSlotVivinoScore(null));
+      }
+    }
     setClickedSlot(selectedUnit ? { unitId: selectedUnit.id, row, col } : null);
   };
 
@@ -123,6 +175,18 @@ export default function StorageMapScreen({
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>{t.noStorageUnits}</Text>
+        <Button
+          mode="contained"
+          buttonColor={colors.primary}
+          style={styles.emptyAction}
+          onPress={() => {
+            // Navigate to Profile → StorageSetup via parent tab navigator
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (navigation.getParent() as any)?.navigate("Profile", { screen: "StorageSetup" });
+          }}
+        >
+          {t.manageStorage}
+        </Button>
       </View>
     );
   }
@@ -202,7 +266,7 @@ export default function StorageMapScreen({
       <Portal>
         <Dialog
           visible={!!slotItem && !openBottleConfirm}
-          onDismiss={() => setSlotItem(null)}
+          onDismiss={() => { setSlotItem(null); setSlotVivinoScore(undefined); }}
           style={styles.dialog}
         >
           <Dialog.Title style={styles.dialogTitle}>{slotItem?.wineName ?? ""}</Dialog.Title>
@@ -212,8 +276,15 @@ export default function StorageMapScreen({
               {slotItem?.producerName ? `  ·  ${slotItem.producerName}` : ""}
             </Text>
             <Text style={styles.dialogQty}>
-              {slotItem?.quantity ?? 0} {t.quantity.toLowerCase()}
+              {slotItem?.quantity ?? 0} {t.bottles}
             </Text>
+            {slotVivinoScore !== undefined ? (
+              slotVivinoScore !== null ? (
+                <Text style={styles.dialogQty}>⭐ {slotVivinoScore.toFixed(1)}</Text>
+              ) : null
+            ) : (
+              <Text style={[styles.dialogQty, { opacity: 0.4 }]}>...</Text>
+            )}
           </Dialog.Content>
           <Dialog.Actions style={styles.dialogActions}>
             <Button
@@ -228,8 +299,8 @@ export default function StorageMapScreen({
               {t.details}
             </Button>
             <Button
-              mode="contained"
-              buttonColor={colors.primary}
+              mode="outlined"
+              textColor={colors.error}
               onPress={() => setOpenBottleConfirm(true)}
               style={styles.dialogBtn}
             >
@@ -284,6 +355,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: "center",
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  emptyAction: {
+    marginTop: 8,
   },
   searchbar: {
     margin: 16,
