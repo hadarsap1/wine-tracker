@@ -3,8 +3,6 @@ import { View, ScrollView, StyleSheet } from "react-native";
 import { Text, ActivityIndicator } from "react-native-paper";
 import {
   collection,
-  collectionGroup,
-  getCountFromServer,
   getDocs,
   doc,
   setDoc,
@@ -13,13 +11,16 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
-import { db } from "@config/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "@config/firebase";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 
-interface MetricsSnapshot {
-  date: string;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface MetricsData {
   users: number;
   households: number;
   wines: number;
@@ -28,7 +29,18 @@ interface MetricsSnapshot {
   feedback: number;
 }
 
-type MetricKey = keyof Omit<MetricsSnapshot, "date">;
+interface MetricsSnapshot extends MetricsData {
+  date: string;
+}
+
+interface FeedbackItem {
+  id: string;
+  message: string;
+  email?: string;
+  createdAt: Timestamp | null;
+}
+
+type MetricKey = keyof MetricsData;
 
 const METRIC_KEYS: MetricKey[] = [
   "users",
@@ -39,35 +51,23 @@ const METRIC_KEYS: MetricKey[] = [
   "feedback",
 ];
 
+// ─── Firestore helpers ────────────────────────────────────────────────────────
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function safeCount(ref: any): Promise<number> {
-  try {
-    const snap = await getCountFromServer(ref);
-    return snap.data().count;
-  } catch {
-    return 0;
-  }
+const callGetAdminMetrics = httpsCallable<void, MetricsData>(
+  functions,
+  "getAdminMetrics"
+);
+
+async function fetchCurrentMetrics(): Promise<MetricsData> {
+  const result = await callGetAdminMetrics();
+  return result.data;
 }
 
-async function fetchCurrentMetrics(): Promise<Omit<MetricsSnapshot, "date">> {
-  const [users, households, wines, inventoryItems, diaryEntries, feedback] =
-    await Promise.all([
-      safeCount(collection(db, "users")),
-      safeCount(collection(db, "households")),
-      safeCount(collectionGroup(db, "wines")),
-      safeCount(collectionGroup(db, "inventoryItems")),
-      safeCount(collectionGroup(db, "diaryEntries")),
-      safeCount(collection(db, "feedback")),
-    ]);
-  return { users, households, wines, inventoryItems, diaryEntries, feedback };
-}
-
-async function saveSnapshotIfNew(
-  metrics: Omit<MetricsSnapshot, "date">
-): Promise<void> {
+async function saveSnapshotIfNew(metrics: MetricsData): Promise<void> {
   const date = todayStr();
   const ref = doc(db, "metrics_snapshots", date);
   const existing = await getDoc(ref);
@@ -84,6 +84,25 @@ async function fetchHistory(): Promise<MetricsSnapshot[]> {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data() as MetricsSnapshot);
+}
+
+async function fetchFeedback(): Promise<FeedbackItem[]> {
+  try {
+    const q = query(
+      collection(db, "feedback"),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({
+      id: d.id,
+      message: d.data().message ?? d.data().text ?? "",
+      email: d.data().email,
+      createdAt: d.data().createdAt ?? null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
@@ -193,20 +212,23 @@ const card = StyleSheet.create({
 export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<Omit<MetricsSnapshot, "date"> | null>(
-    null
-  );
+  const [current, setCurrent] = useState<MetricsData | null>(null);
   const [history, setHistory] = useState<MetricsSnapshot[]>([]);
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const metrics = await fetchCurrentMetrics();
+      const [metrics, feedback] = await Promise.all([
+        fetchCurrentMetrics(),
+        fetchFeedback(),
+      ]);
       await saveSnapshotIfNew(metrics);
       const hist = await fetchHistory();
       setCurrent(metrics);
       setHistory(hist);
+      setFeedbackItems(feedback);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -252,6 +274,7 @@ export default function AdminDashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Metric Cards */}
       <View style={styles.grid}>
         {METRIC_KEYS.map((key) => (
           <MetricCard
@@ -264,6 +287,7 @@ export default function AdminDashboardScreen() {
         ))}
       </View>
 
+      {/* History Table */}
       {history.length > 0 && (
         <>
           <Text variant="labelLarge" style={styles.sectionHeader}>
@@ -306,6 +330,56 @@ export default function AdminDashboardScreen() {
               ))}
           </View>
         </>
+      )}
+
+      {/* Feedback List */}
+      <Text variant="labelLarge" style={styles.sectionHeader}>
+        {t.adminFeedbackTitle}
+        {feedbackItems.length > 0 && (
+          <Text style={{ color: colors.gold }}> ({feedbackItems.length})</Text>
+        )}
+      </Text>
+      {feedbackItems.length === 0 ? (
+        <Text variant="bodySmall" style={styles.emptyFeedback}>
+          {t.adminFeedbackEmpty}
+        </Text>
+      ) : (
+        <View style={styles.feedbackList}>
+          {feedbackItems.map((item) => {
+            const ts = item.createdAt?.toDate?.();
+            const dateStr = ts
+              ? ts.toLocaleDateString("he-IL", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "";
+            return (
+              <View key={item.id} style={styles.feedbackItem}>
+                <Text
+                  variant="bodySmall"
+                  style={styles.feedbackMessage}
+                >
+                  {item.message}
+                </Text>
+                <View style={styles.feedbackMeta}>
+                  {item.email ? (
+                    <Text variant="labelSmall" style={styles.feedbackEmail}>
+                      {item.email}
+                    </Text>
+                  ) : null}
+                  {dateStr ? (
+                    <Text variant="labelSmall" style={styles.feedbackDate}>
+                      {dateStr}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
@@ -366,5 +440,36 @@ const styles = StyleSheet.create({
   },
   dateCol: {
     flex: 1.2,
+  },
+  emptyFeedback: {
+    color: colors.textSecondary,
+    textAlign: "right",
+    paddingVertical: 8,
+  },
+  feedbackList: {
+    gap: 8,
+  },
+  feedbackItem: {
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    padding: 12,
+  },
+  feedbackMessage: {
+    color: colors.text,
+    textAlign: "right",
+    lineHeight: 20,
+  },
+  feedbackMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  feedbackEmail: {
+    color: colors.primary,
+    fontSize: 10,
+  },
+  feedbackDate: {
+    color: colors.textSecondary,
+    fontSize: 10,
   },
 });

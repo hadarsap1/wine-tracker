@@ -305,6 +305,8 @@ export const t = {
   adminDashboard: "דאשבורד",
   adminHistory: "היסטוריה (14 ימים)",
   adminDate: "תאריך",
+  adminFeedbackTitle: "משובים",
+  adminFeedbackEmpty: "אין משובים עדיין",
   adminMetricLabels: {
     users: "משתמשים",
     households: "משקי בית",

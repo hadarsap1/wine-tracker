@@ -362,6 +362,52 @@ export const detectLabelText = onCall<DetectTextRequest, Promise<DetectTextRespo
   }
 );
 
+// ── getAdminMetrics ────────────────────────────────────────────────────────────
+
+const ADMIN_EMAIL = 'hadarsap@gmail.com';
+
+interface AdminMetricsResponse {
+  users: number;
+  households: number;
+  wines: number;
+  inventoryItems: number;
+  diaryEntries: number;
+  feedback: number;
+}
+
+export const getAdminMetrics = onCall<void, Promise<AdminMetricsResponse>>(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+    if (request.auth.token.email !== ADMIN_EMAIL) {
+      throw new HttpsError('permission-denied', 'Not authorized.');
+    }
+
+    const db = admin.firestore();
+    const count = async (ref: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference) => {
+      try {
+        return (await ref.count().get()).data().count;
+      } catch {
+        return 0;
+      }
+    };
+
+    const [users, households, wines, inventoryItems, diaryEntries, feedback] =
+      await Promise.all([
+        count(db.collection('users')),
+        count(db.collection('households')),
+        count(db.collectionGroup('wines')),
+        count(db.collectionGroup('inventoryItems')),
+        count(db.collectionGroup('diaryEntries')),
+        count(db.collection('feedback')),
+      ]);
+
+    return { users, households, wines, inventoryItems, diaryEntries, feedback };
+  }
+);
+
 // ── analyzeLabel (OpenAI GPT-4o Vision) ───────────────────────────────────────
 
 const AI_WINE_TYPE_MAP: Record<string, string> = {
