@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
 import { Button, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
@@ -10,7 +10,11 @@ export default function LoginScreen() {
   const { signInWithGoogle, loading, error } = useAuthStore();
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.header}>
         <View style={styles.iconContainer}>
           <MaterialCommunityIcons
@@ -22,9 +26,31 @@ export default function LoginScreen() {
         <Text variant="headlineLarge" style={styles.title}>
           {t.signInTitle}
         </Text>
-        <Text variant="bodyLarge" style={styles.subtitle}>
-          {t.signInSubtitle}
+        <Text variant="bodyLarge" style={styles.tagline}>
+          {t.loginTagline}
         </Text>
+      </View>
+
+      <View style={styles.features}>
+        {t.loginFeatures.map((feature, index) => (
+          <View key={index} style={styles.featureRow}>
+            <View style={styles.featureIconWrap}>
+              <MaterialCommunityIcons
+                name={feature.icon as any}
+                size={22}
+                color={colors.gold}
+              />
+            </View>
+            <View style={styles.featureText}>
+              <Text variant="titleSmall" style={styles.featureTitle}>
+                {feature.title}
+              </Text>
+              <Text variant="bodySmall" style={styles.featureDesc}>
+                {feature.desc}
+              </Text>
+            </View>
+          </View>
+        ))}
       </View>
 
       <View style={styles.formCard}>
@@ -52,20 +78,24 @@ export default function LoginScreen() {
           {t.signInWithGoogle}
         </Button>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  container: {
+    flexGrow: 1,
     justifyContent: "center",
     padding: 24,
+    paddingVertical: 48,
   },
   header: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 28,
   },
   iconContainer: {
     width: 100,
@@ -82,9 +112,45 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontWeight: "bold",
   },
-  subtitle: {
+  tagline: {
     color: colors.textSecondary,
     marginTop: 8,
+    textAlign: "center",
+  },
+  features: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    gap: 16,
+  },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  featureIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.primary + "33",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  featureText: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  featureTitle: {
+    color: colors.text,
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  featureDesc: {
+    color: colors.textSecondary,
+    marginTop: 2,
     textAlign: "right",
   },
   formCard: {

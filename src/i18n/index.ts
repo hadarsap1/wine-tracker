@@ -7,6 +7,29 @@ export const t = {
   // Auth
   signInTitle: "יומן יין",
   signInSubtitle: "התחברות לחשבונך",
+  loginTagline: "ניהל את אוסף היין שלך בקלות ובסגנון",
+  loginFeatures: [
+    {
+      icon: "bottle-wine",
+      title: "מרתף חכם",
+      desc: "עקוב אחר כל בקבוק – כמות, מחיר ומיקום אחסון",
+    },
+    {
+      icon: "book-open-variant",
+      title: "יומן טעימות",
+      desc: "דרג ותעד כל יין שפתחת, עם תמונות והערות",
+    },
+    {
+      icon: "camera",
+      title: "סריקת תוויות",
+      desc: "AI מזהה את פרטי היין אוטומטית מתמונה",
+    },
+    {
+      icon: "account-multiple",
+      title: "מרתף משותף",
+      desc: "שתף את האוסף עם בני הבית",
+    },
+  ] as Array<{ icon: string; title: string; desc: string }>,
   signUpTitle: "יצירת חשבון",
   signUpSubtitle: "התחל לעקוב אחר אוסף היין שלך",
   email: "אימייל",
