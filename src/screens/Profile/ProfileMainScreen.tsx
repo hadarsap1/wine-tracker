@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Platform, View, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
-import { Text, Button, Dialog, Portal } from "react-native-paper";
+import { Text, Button, Dialog, Portal, TextInput } from "react-native-paper";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@config/firebase";
 import { useAuthStore } from "@stores/authStore";
 import * as householdService from "@services/household";
 import { ProfileHeader, SettingsRow } from "@components/profile";
@@ -23,6 +25,10 @@ export default function ProfileMainScreen({
   const [currencyDialogVisible, setCurrencyDialogVisible] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [installDialogVisible, setInstallDialogVisible] = useState(false);
+  const [feedbackDialogVisible, setFeedbackDialogVisible] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false);
   const deferredInstallPrompt = useRef<any>(null);
   const isStandalone =
     Platform.OS === "web" &&
@@ -82,6 +88,31 @@ export default function ProfileMainScreen({
   const handleSelectWineType = async (type: WineType) => {
     setWineTypeDialogVisible(false);
     await updatePreferences({ defaultWineType: type });
+  };
+
+  const handleSendFeedback = async () => {
+    if (!feedbackText.trim() || !profile) return;
+    setFeedbackSending(true);
+    try {
+      await addDoc(collection(db, "feedback"), {
+        message: feedbackText.trim(),
+        email: profile.email,
+        userId: profile.uid,
+        createdAt: serverTimestamp(),
+      });
+      setFeedbackSuccess(true);
+      setFeedbackText("");
+    } catch {
+      // keep dialog open so user can retry
+    } finally {
+      setFeedbackSending(false);
+    }
+  };
+
+  const closeFeedbackDialog = () => {
+    setFeedbackDialogVisible(false);
+    setFeedbackSuccess(false);
+    setFeedbackText("");
   };
 
   if (!profile && authLoading) {
@@ -194,6 +225,11 @@ export default function ProfileMainScreen({
         icon="help-circle-outline"
         label={t.help}
         onPress={() => navigation.navigate("Help")}
+      />
+      <SettingsRow
+        icon="message-text-outline"
+        label={t.sendFeedback}
+        onPress={() => setFeedbackDialogVisible(true)}
       />
       {Platform.OS === "web" && !isStandalone && (
         <SettingsRow
@@ -342,6 +378,53 @@ export default function ProfileMainScreen({
           </Dialog.Content>
         </Dialog>
       </Portal>
+
+      {/* Feedback Dialog */}
+      <Portal>
+        <Dialog
+          visible={feedbackDialogVisible}
+          onDismiss={closeFeedbackDialog}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.sendFeedback}</Dialog.Title>
+          <Dialog.Content>
+            {feedbackSuccess ? (
+              <Text style={[styles.dialogText, { color: "#4caf50", textAlign: "center" }]}>
+                {t.feedbackSent}
+              </Text>
+            ) : (
+              <TextInput
+                mode="outlined"
+                placeholder={t.feedbackPlaceholder}
+                value={feedbackText}
+                onChangeText={setFeedbackText}
+                multiline
+                numberOfLines={4}
+                style={styles.feedbackInput}
+                outlineColor={colors.border}
+                activeOutlineColor={colors.primary}
+                textColor={colors.text}
+                placeholderTextColor={colors.textSecondary}
+              />
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={closeFeedbackDialog} textColor={colors.textSecondary}>
+              {feedbackSuccess ? t.close : t.cancel}
+            </Button>
+            {!feedbackSuccess && (
+              <Button
+                onPress={handleSendFeedback}
+                loading={feedbackSending}
+                disabled={feedbackSending || !feedbackText.trim()}
+                textColor={colors.primary}
+              >
+                {t.send}
+              </Button>
+            )}
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -376,6 +459,10 @@ const styles = StyleSheet.create({
   },
   dialog: {
     backgroundColor: colors.card,
+  },
+  feedbackInput: {
+    backgroundColor: colors.background,
+    minHeight: 100,
   },
   dialogTitle: {
     color: colors.text,

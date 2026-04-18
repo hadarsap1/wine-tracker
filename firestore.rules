@@ -205,11 +205,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── /feedback/{feedbackId} ────────────────────────────────────────────
+
+    match /feedback/{feedbackId} {
+      allow create: if isSignedIn()
+        && incomingData().userId == request.auth.uid
+        && isValidString(incomingData().message);
+      allow read: if isSignedIn()
+        && request.auth.token.email == 'hadarsap@gmail.com';
+    }
+
     // ── /metrics_snapshots/{date} ─────────────────────────────────────────
     // Daily aggregate counts saved by the admin dashboard.
 
     match /metrics_snapshots/{date} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSignedIn()
+        && request.auth.token.email == 'hadarsap@gmail.com';
     }
 
     // ── Deny everything else ──────────────────────────────────────────────

@@ -305,6 +305,10 @@ export const t = {
   adminDashboard: "דאשבורד",
   adminHistory: "היסטוריה (14 ימים)",
   adminDate: "תאריך",
+  sendFeedback: "שלח משוב",
+  feedbackPlaceholder: "ספר לנו מה חשבת... (בעיות, רעיונות, הצעות)",
+  feedbackSent: "תודה! המשוב נשלח 🙏",
+  send: "שלח",
   adminFeedbackTitle: "משובים",
   adminFeedbackEmpty: "אין משובים עדיין",
   adminMetricLabels: {
