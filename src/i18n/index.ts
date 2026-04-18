@@ -300,6 +300,20 @@ export const t = {
     [WineType.Other]: "אחר",
   } as Record<string, string>,
 
+  // Admin Dashboard
+  adminSection: "ניהול",
+  adminDashboard: "דאשבורד",
+  adminHistory: "היסטוריה (14 ימים)",
+  adminDate: "תאריך",
+  adminMetricLabels: {
+    users: "משתמשים",
+    households: "משקי בית",
+    wines: "יינות",
+    inventoryItems: "פריטי מלאי",
+    diaryEntries: "רשמי טעימה",
+    feedback: "משובים",
+  } as Record<string, string>,
+
   // Help & Guide
   help: "עזרה ומדריך",
   helpSubtitle: "כל מה שצריך לדעת על יומן יין",
@@ -424,5 +438,6 @@ export const t = {
     storageSetup: "ניהול אחסון",
     storageMap: "מפת האחסון",
     importExcel: "ייבוא מאקסל",
+    adminDashboard: "דאשבורד",
   },
 } as const;

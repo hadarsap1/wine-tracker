@@ -172,6 +172,16 @@ export default function ProfileMainScreen({
         onPress={() => navigation.navigate("ManageHousehold")}
       />
 
+      {/* Admin */}
+      <Text variant="labelLarge" style={styles.sectionHeader}>
+        {t.adminSection}
+      </Text>
+      <SettingsRow
+        icon="chart-bar"
+        label={t.adminDashboard}
+        onPress={() => navigation.navigate("AdminDashboard")}
+      />
+
       {/* Support */}
       <Text variant="labelLarge" style={styles.sectionHeader}>
         {t.help}

@@ -10,6 +10,7 @@ import ManageHouseholdScreen from "@screens/Profile/ManageHouseholdScreen";
 import JoinHouseholdScreen from "@screens/Profile/JoinHouseholdScreen";
 import HelpScreen from "@screens/Profile/HelpScreen";
 import StorageSetupScreen from "@screens/Profile/StorageSetupScreen";
+import AdminDashboardScreen from "@screens/Profile/AdminDashboardScreen";
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -59,6 +60,11 @@ export default function ProfileStack() {
         name="StorageSetup"
         component={StorageSetupScreen}
         options={{ title: t.stackTitles.storageSetup }}
+      />
+      <Stack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ title: t.stackTitles.adminDashboard }}
       />
     </Stack.Navigator>
   );

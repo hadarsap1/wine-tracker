@@ -205,6 +205,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── /metrics_snapshots/{date} ─────────────────────────────────────────
+    // Daily aggregate counts saved by the admin dashboard.
+
+    match /metrics_snapshots/{date} {
+      allow read, write: if isSignedIn();
+    }
+
     // ── Deny everything else ──────────────────────────────────────────────
 
     match /{document=**} {

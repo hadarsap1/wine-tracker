@@ -48,6 +48,7 @@ export type ProfileStackParamList = {
   JoinHousehold: undefined;
   Help: undefined;
   StorageSetup: undefined;
+  AdminDashboard: undefined;
 };
 
 export type SearchStackParamList = {
@@ -118,3 +119,4 @@ export type ScanReviewScreenProps = NativeStackScreenProps<ScanStackParamList, "
 
 export type StorageSetupScreenProps = NativeStackScreenProps<ProfileStackParamList, "StorageSetup">;
 export type StorageMapScreenProps = NativeStackScreenProps<InventoryStackParamList, "StorageMap">;
+export type AdminDashboardScreenProps = NativeStackScreenProps<ProfileStackParamList, "AdminDashboard">;
