@@ -48,16 +48,32 @@ jobs:
           channelId: live
           projectId: winetracker2026
 
-      # Rules and functions live in this repo — deploy them together with
-      # hosting so what's live never drifts from what's reviewed.
-      - name: Deploy Firestore/Storage rules and Cloud Functions
+      # Rules and functions live in this repo — deploy them alongside hosting so
+      # what's live never drifts from what's reviewed. Rules/storage are
+      # deployed FIRST and independently so the security-critical Firestore
+      # rules always land even if the Cloud Functions deploy fails (functions
+      # need the CI service account to have iam.serviceAccounts.ActAs + Cloud
+      # Functions/Run admin, which must be granted by a project Owner).
+      - name: Deploy Firestore & Storage rules
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           npx firebase-tools deploy \
-            --only firestore:rules,storage,functions \
+            --only firestore:rules,storage \
+            --project winetracker2026 \
+            --non-interactive --force
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Deploy Cloud Functions
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx firebase-tools deploy \
+            --only functions \
             --project winetracker2026 \
             --non-interactive --force
           rm -f "$RUNNER_TEMP/firebase-sa.json"
