@@ -4,12 +4,18 @@ import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
 
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+
 interface SettingsRowProps {
   icon: string;
   label: string;
   value?: string;
   onPress?: () => void;
   showChevron?: boolean;
+  /** Optional element rendered on the trailing edge (e.g. a Switch). */
+  right?: React.ReactNode;
+  /** Tint the label/icon to signal a destructive action. */
+  destructive?: boolean;
 }
 
 export default function SettingsRow({
@@ -18,7 +24,10 @@ export default function SettingsRow({
   value,
   onPress,
   showChevron = true,
+  right,
+  destructive = false,
 }: SettingsRowProps): React.ReactElement {
+  const tint = destructive ? colors.error : colors.textSecondary;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -27,18 +36,20 @@ export default function SettingsRow({
       ]}
       onPress={onPress}
       disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
     >
       {/* In RTL row: first child = rightmost (right side) */}
       <View style={styles.iconContainer}>
-        <MaterialCommunityIcons
-          name={icon as any}
-          size={22}
-          color={colors.textSecondary}
-        />
+        <MaterialCommunityIcons name={icon as IconName} size={22} color={tint} />
       </View>
 
       {/* flex:1 fills remaining space */}
-      <Text variant="bodyLarge" style={styles.label} numberOfLines={1}>
+      <Text
+        variant="bodyLarge"
+        style={[styles.label, destructive ? styles.destructiveLabel : undefined]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
 
@@ -49,8 +60,10 @@ export default function SettingsRow({
         </Text>
       ) : null}
 
+      {right}
+
       {/* In RTL row: last child = leftmost (left side) */}
-      {showChevron && onPress ? (
+      {showChevron && onPress && !right ? (
         <MaterialCommunityIcons
           name="chevron-left"
           size={22}
@@ -86,6 +99,9 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     textAlign: "right",
+  },
+  destructiveLabel: {
+    color: colors.error,
   },
   value: {
     color: colors.textSecondary,

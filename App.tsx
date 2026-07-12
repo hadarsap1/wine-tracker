@@ -10,6 +10,7 @@ import { useAuthStore } from "@stores/authStore";
 import { validateEnv } from "@config/env";
 import { RootNavigator } from "@navigation/index";
 import GlobalSnackbar from "@components/common/GlobalSnackbar";
+import ErrorBoundary from "@components/common/ErrorBoundary";
 import * as analytics from "@services/analytics";
 
 // Force RTL for Hebrew
@@ -106,27 +107,29 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <PaperProvider theme={paperTheme}>
-        <NavigationContainer
-          ref={navigationRef}
-          theme={navigationTheme}
-          onReady={() => {
-            routeNameRef.current = navigationRef.getCurrentRoute()?.name;
-          }}
-          onStateChange={() => {
-            const current = navigationRef.getCurrentRoute()?.name;
-            if (current && current !== routeNameRef.current) {
-              analytics.screenView(current);
-              routeNameRef.current = current;
-            }
-          }}
-        >
-          <AppContent />
-          <GlobalSnackbar />
-          <StatusBar style="light" />
-        </NavigationContainer>
-      </PaperProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <PaperProvider theme={paperTheme}>
+          <NavigationContainer
+            ref={navigationRef}
+            theme={navigationTheme}
+            onReady={() => {
+              routeNameRef.current = navigationRef.getCurrentRoute()?.name;
+            }}
+            onStateChange={() => {
+              const current = navigationRef.getCurrentRoute()?.name;
+              if (current && current !== routeNameRef.current) {
+                analytics.screenView(current);
+                routeNameRef.current = current;
+              }
+            }}
+          >
+            <AppContent />
+            <GlobalSnackbar />
+            <StatusBar style="light" />
+          </NavigationContainer>
+        </PaperProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

@@ -30,9 +30,18 @@ const BASE_PROPS = {
 };
 
 let _distinctId: string | null = null;
+let _enabled = true;
+
+/**
+ * Enable/disable analytics at runtime based on the user's privacy preference.
+ * Call after the profile loads and whenever the preference changes.
+ */
+export function setEnabled(enabled: boolean): void {
+  _enabled = enabled;
+}
 
 function post(body: Record<string, unknown>): void {
-  if (!env.posthogApiKey) return;
+  if (!env.posthogApiKey || !_enabled) return;
   fetch(`${POSTHOG_HOST}/capture/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

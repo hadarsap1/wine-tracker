@@ -7,6 +7,7 @@ import type { UserProfile, UserPreferences } from "@/types/index";
 import { useInventoryStore } from "./inventoryStore";
 import { useDiaryStore } from "./diaryStore";
 import * as analytics from "@services/analytics";
+import { authErrorMessage } from "@utils/authErrors";
 
 interface AuthState {
   user: User | null;
@@ -20,6 +21,8 @@ interface AuthActions {
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (data: { displayName: string }) => Promise<void>;
   updatePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
@@ -86,6 +89,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (user) {
         try {
           const profile = await bootstrapUserAccount(user);
+          analytics.setEnabled(!profile?.preferences?.analyticsOptOut);
           analytics.identify(user.uid, {
             email: user.email ?? undefined,
             name: user.displayName ?? profile?.displayName ?? undefined,
@@ -125,7 +129,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       analytics.track.accountCreated('email');
       set({ user, profile, loading: false });
     } catch (e) {
-      set({ loading: false, error: (e as Error).message });
+      set({ loading: false, error: authErrorMessage(e) });
       throw e;
     }
   },
@@ -138,7 +142,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       await authService.signIn(email, password);
       // State will be set by onAuthStateChanged callback in initialize()
     } catch (e) {
-      set({ loading: false, error: (e as Error).message });
+      set({ loading: false, error: authErrorMessage(e) });
       throw e;
     }
   },
@@ -150,6 +154,24 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       _pendingSignInMethod = 'google';
       await authService.signInWithGoogle();
       // State will be set by onAuthStateChanged callback in initialize()
+    } catch (e) {
+      set({ loading: false, error: authErrorMessage(e) });
+      throw e;
+    }
+  },
+
+  sendPasswordReset: async (email) => {
+    await authService.sendPasswordReset(email.trim());
+  },
+
+  deleteAccount: async () => {
+    set({ loading: true, error: null });
+    try {
+      analytics.reset();
+      await authService.deleteAccount();
+      useInventoryStore.getState().reset();
+      useDiaryStore.getState().reset();
+      set({ user: null, profile: null, loading: false });
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
       throw e;
@@ -182,6 +204,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const { user, profile } = get();
     if (!user || !profile) throw new Error("Not authenticated");
     await userService.updateUserPreferences(user.uid, prefs);
+    if (prefs.analyticsOptOut !== undefined) {
+      analytics.setEnabled(!prefs.analyticsOptOut);
+    }
     set({
       profile: {
         ...profile,

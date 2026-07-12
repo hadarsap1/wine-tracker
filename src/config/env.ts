@@ -15,6 +15,12 @@ export const env = {
   // PostHog product analytics (https://posthog.com → Project Settings → Project API Key)
   posthogApiKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? '',
 
+  // Firebase App Check — reCAPTCHA v3 site key (web). When set, App Check is
+  // initialized on web to attest requests to Functions/Firestore/Storage.
+  // Leave empty to disable (e.g. local dev). Get it from Firebase Console →
+  // App Check → Apps → Web → reCAPTCHA v3.
+  recaptchaSiteKey: (process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY ?? '').trim(),
+
   // App public URL (used for invite links etc.)
   appUrl: process.env.EXPO_PUBLIC_APP_URL ?? 'https://wine-tracker.web.app',
 } as const;

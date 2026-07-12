@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Platform, View, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
-import { Text, Button, Dialog, Portal } from "react-native-paper";
+import { Text, Button, Dialog, Portal, Switch, TextInput } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import * as householdService from "@services/household";
 import { ProfileHeader, SettingsRow } from "@components/profile";
@@ -15,13 +15,23 @@ const CURRENCY_OPTIONS = ["USD", "EUR", "ILS", "GBP", "CAD", "AUD", "JPY", "CHF"
 export default function ProfileMainScreen({
   navigation,
 }: ProfileMainScreenProps) {
-  const { profile, signOut, updatePreferences, loading: authLoading } = useAuthStore();
+  const {
+    profile,
+    signOut,
+    updatePreferences,
+    deleteAccount,
+    loading: authLoading,
+  } = useAuthStore();
   const [householdName, setHouseholdName] = useState<string>("");
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [signOutDialogVisible, setSignOutDialogVisible] = useState(false);
   const [wineTypeDialogVisible, setWineTypeDialogVisible] = useState(false);
   const [currencyDialogVisible, setCurrencyDialogVisible] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [installDialogVisible, setInstallDialogVisible] = useState(false);
   const deferredInstallPrompt = useRef<any>(null);
   const isStandalone =
@@ -82,6 +92,18 @@ export default function ProfileMainScreen({
   const handleSelectWineType = async (type: WineType) => {
     setWineTypeDialogVisible(false);
     await updatePreferences({ defaultWineType: type });
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      // On success the auth listener clears state and routes back to Login.
+    } catch {
+      setDeleteError(t.deleteAccountFailed);
+      setDeleting(false);
+    }
   };
 
   if (!profile && authLoading) {
@@ -195,9 +217,87 @@ export default function ProfileMainScreen({
         showChevron={false}
       />
 
+      {/* Privacy */}
+      <Text variant="labelLarge" style={styles.sectionHeader}>
+        {t.privacy}
+      </Text>
+      <SettingsRow
+        icon="chart-box-outline"
+        label={t.analyticsToggle}
+        showChevron={false}
+        right={
+          <Switch
+            value={!profile.preferences.analyticsOptOut}
+            onValueChange={(v) => updatePreferences({ analyticsOptOut: !v })}
+            color={colors.primary}
+          />
+        }
+      />
+      <Text variant="bodySmall" style={styles.hint}>
+        {t.analyticsToggleDesc}
+      </Text>
+
+      {/* Danger zone */}
+      <SettingsRow
+        icon="delete-outline"
+        label={t.deleteAccount}
+        onPress={() => {
+          setDeleteConfirmText("");
+          setDeleteError(null);
+          setDeleteDialogVisible(true);
+        }}
+        showChevron={false}
+        destructive
+      />
+
       <Text variant="bodySmall" style={styles.version}>
         {t.appVersion}
       </Text>
+
+      {/* Delete Account Dialog */}
+      <Portal>
+        <Dialog
+          visible={deleteDialogVisible}
+          onDismiss={() => !deleting && setDeleteDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{t.deleteAccountConfirm}</Dialog.Title>
+          <Dialog.Content>
+            <Text style={[styles.dialogText, styles.dialogTextRtl]}>
+              {t.deleteAccountMsg}
+            </Text>
+            <TextInput
+              label={t.deleteAccountTypeToConfirm}
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              mode="outlined"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={styles.deleteInput}
+            />
+            {deleteError ? (
+              <Text style={styles.deleteErrorText}>{deleteError}</Text>
+            ) : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => setDeleteDialogVisible(false)}
+              disabled={deleting}
+              textColor={colors.textSecondary}
+            >
+              {t.cancel}
+            </Button>
+            <Button
+              onPress={handleDeleteAccount}
+              loading={deleting}
+              disabled={deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
+              textColor={colors.error}
+            >
+              {t.deleteAccountConfirmBtn}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Install App Dialog */}
       <Portal>
@@ -359,6 +459,22 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: "center",
     paddingVertical: 24,
+  },
+  hint: {
+    color: colors.textSecondary,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
+    textAlign: "right",
+  },
+  deleteInput: {
+    marginTop: 16,
+    backgroundColor: colors.card,
+  },
+  deleteErrorText: {
+    color: colors.error,
+    marginTop: 10,
+    textAlign: "right",
   },
   dialog: {
     backgroundColor: colors.card,

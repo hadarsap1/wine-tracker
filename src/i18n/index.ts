@@ -425,4 +425,40 @@ export const t = {
     storageMap: "מפת האחסון",
     importExcel: "ייבוא מאקסל",
   },
+
+  // Auth — email/password + errors
+  signInWithEmail: "כניסה עם אימייל",
+  forgotPassword: "שכחת סיסמה?",
+  resetPasswordTitle: "איפוס סיסמה",
+  resetPasswordMsg: "הזן את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה.",
+  resetPasswordSend: "שלח קישור איפוס",
+  resetPasswordSent: "נשלח אימייל לאיפוס הסיסמה. בדוק את תיבת הדואר שלך.",
+  authInvalidCredentials: "אימייל או סיסמה שגויים.",
+  authEmailInUse: "כתובת האימייל כבר רשומה. נסה להתחבר.",
+  authUserDisabled: "החשבון הזה הושבת.",
+  authTooManyRequests: "יותר מדי ניסיונות. נסה שוב מאוחר יותר.",
+  authNetworkError: "בעיית רשת. בדוק את החיבור ונסה שוב.",
+  authPopupClosed: "החלון נסגר לפני השלמת ההתחברות.",
+  authRequiresRecentLogin: "מטעמי אבטחה, יש להתחבר מחדש לפני ביצוע פעולה זו.",
+  authGoogleWebOnly: "כניסה עם Google זמינה בגרסת הדפדפן. באפליקציה, השתמש באימייל וסיסמה.",
+  authGenericError: "משהו השתבש. נסה שוב.",
+
+  // Account deletion
+  deleteAccount: "מחיקת חשבון",
+  deleteAccountConfirm: "למחוק את החשבון?",
+  deleteAccountMsg:
+    "פעולה זו בלתי הפיכה. כל היינות, רשומות היומן והתמונות במרתפים שבבעלותך הבלעדית יימחקו לצמיתות.",
+  deleteAccountConfirmBtn: "מחק לצמיתות",
+  deleteAccountTypeToConfirm: "הקלד DELETE לאישור",
+  deleteAccountFailed: "מחיקת החשבון נכשלה. נסה שוב.",
+
+  // Privacy / analytics
+  privacy: "פרטיות",
+  analyticsToggle: "שיתוף נתוני שימוש אנונימיים",
+  analyticsToggleDesc: "עוזר לנו לשפר את האפליקציה. לא כולל את פרטי היינות שלך.",
+
+  // Error boundary
+  errorBoundaryTitle: "משהו השתבש",
+  errorBoundaryMsg: "אירעה שגיאה בלתי צפויה. נסה לטעון מחדש.",
+  errorBoundaryReload: "טען מחדש",
 } as const;

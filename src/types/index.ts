@@ -69,6 +69,8 @@ export interface UserPreferences {
   defaultWineType?: WineType;
   currency: string;
   theme: "light" | "dark" | "system";
+  /** When true, product analytics events are not sent. Defaults to opted-in. */
+  analyticsOptOut?: boolean;
 }
 
 export interface VivinoData {
