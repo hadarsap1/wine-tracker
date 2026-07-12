@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, initializeAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
@@ -40,7 +45,26 @@ function createAuth() {
 
 export const auth = createAuth();
 
-export const db = getFirestore(app);
+// Enable offline persistence so cached data is available without a connection
+// and writes are queued while offline — important for a cellar app used in
+// basements / poor signal. Falls back to the default in-memory cache if
+// persistence can't be initialized (e.g. unsupported browser / private mode).
+function createDb() {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache(
+        Platform.OS === 'web'
+          ? { tabManager: persistentMultipleTabManager() }
+          : {}
+      ),
+    });
+  } catch (e) {
+    console.warn('[firebase] persistent cache unavailable, using default:', e);
+    return getFirestore(app);
+  }
+}
+
+export const db = createDb();
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 

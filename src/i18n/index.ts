@@ -55,6 +55,8 @@ export const t = {
   details: "פרטים",
   error: "שגיאה",
   ok: "אישור",
+  back: "חזרה",
+  emptySlot: "משבצת פנויה",
   loading: "טוען...",
   noHousehold: "לא נמצא משק בית. נא להתנתק ולהתחבר מחדש.",
   failedToUpdateWine: "שגיאה בשמירת השינויים",

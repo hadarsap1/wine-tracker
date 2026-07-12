@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   orderBy,
+  onSnapshot,
   serverTimestamp,
   writeBatch,
   runTransaction,
@@ -118,6 +119,24 @@ export async function getInventoryItems(
   const q = query(inventoryCol(householdId), orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InventoryItem);
+}
+
+/**
+ * Subscribes to live inventory updates for a household. Fires the callback on
+ * every change (including other members' edits) so shared cellars stay in sync
+ * without manual refresh. Returns an unsubscribe function.
+ */
+export function subscribeInventoryItems(
+  householdId: string,
+  onData: (items: InventoryItem[]) => void,
+  onError?: (e: Error) => void
+): () => void {
+  const q = query(inventoryCol(householdId), orderBy("createdAt", "desc"));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InventoryItem)),
+    (e) => onError?.(e)
+  );
 }
 
 export async function getWine(

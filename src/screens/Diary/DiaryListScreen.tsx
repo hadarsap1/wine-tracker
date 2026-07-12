@@ -14,16 +14,17 @@ export default function DiaryListScreen({
   navigation,
 }: DiaryListScreenProps) {
   const profile = useAuthStore((s) => s.profile);
-  const { entries, loading, loadEntries } = useDiaryStore();
+  const { entries, loading, loadEntries, subscribeEntries } = useDiaryStore();
   const [search, setSearch] = useState("");
 
   const householdId = profile?.householdIds?.[0];
 
   useEffect(() => {
-    if (householdId) {
-      loadEntries(householdId);
-    }
-  }, [householdId, loadEntries]);
+    if (!householdId) return;
+    // Live subscription keeps entries in sync across household members.
+    const unsubscribe = subscribeEntries(householdId);
+    return unsubscribe;
+  }, [householdId, subscribeEntries]);
 
   const filteredEntries = search
     ? entries.filter((entry) =>
@@ -86,6 +87,7 @@ export default function DiaryListScreen({
       />
       <FAB
         icon="plus"
+        accessibilityLabel={t.addFirstEntry}
         style={styles.fab}
         onPress={() => navigation.navigate("AddEntry")}
         color={colors.onPrimary}

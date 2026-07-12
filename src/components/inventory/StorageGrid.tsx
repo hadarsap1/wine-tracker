@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, TouchableOpacity, Image } from "react-nat
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
 import type { AppStorageUnit } from "@/types/index";
 
@@ -142,6 +143,12 @@ export default function StorageGrid({
                   <TouchableOpacity
                     key={colIdx}
                     activeOpacity={canPress ? 0.65 : 1}
+                    accessibilityRole={canPress ? "button" : "image"}
+                    accessibilityLabel={
+                      isOccupied
+                        ? slotData.wineName
+                        : `${t.emptySlot} ${rowIdx + 1}·${colIdx + 1}`
+                    }
                     style={[
                       styles.cell,
                       {

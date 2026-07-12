@@ -20,7 +20,7 @@ export default function InventoryListScreen({
   navigation,
 }: InventoryListScreenProps) {
   const profile = useAuthStore((s) => s.profile);
-  const { items, loading, loadItems } = useInventoryStore();
+  const { items, loading, loadItems, subscribeItems } = useInventoryStore();
   const { units, loading: cellarLoading, loadUnits } = useCellarStore();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<InventoryStatus>("in_stock");
@@ -52,14 +52,15 @@ export default function InventoryListScreen({
   }, [navigation, showMap]);
 
   useEffect(() => {
-    if (householdId) {
-      loadItems(householdId);
-      loadUnits(householdId);
-      // Reset image cache on household change
-      loadedWineIds.current.clear();
-      setWineImages({});
-    }
-  }, [householdId, loadItems, loadUnits]);
+    if (!householdId) return;
+    loadUnits(householdId);
+    // Reset image cache on household change
+    loadedWineIds.current.clear();
+    setWineImages({});
+    // Live subscription keeps shared cellars in sync across household members.
+    const unsubscribe = subscribeItems(householdId);
+    return unsubscribe;
+  }, [householdId, subscribeItems, loadUnits]);
 
   // Clamp selectedUnitIdx when units change (e.g. unit deleted)
   useEffect(() => {
@@ -415,6 +416,7 @@ export default function InventoryListScreen({
         {tab === "on_the_way" && (
           <FAB
             icon="file-import-outline"
+            accessibilityLabel={t.importOrder}
             style={styles.fabSecondary}
             onPress={() => navigation.navigate("ImportOrder")}
             color={colors.primary}
@@ -424,6 +426,7 @@ export default function InventoryListScreen({
         {tab === "in_stock" && (
           <FAB
             icon="file-excel-outline"
+            accessibilityLabel={t.stackTitles.importExcel}
             style={styles.fabSecondary}
             onPress={() => navigation.navigate("ImportExcel")}
             color={colors.primary}
@@ -432,6 +435,7 @@ export default function InventoryListScreen({
         )}
         <FAB
           icon="plus"
+          accessibilityLabel={t.addWine}
           style={styles.fab}
           onPress={() => navigation.navigate("AddWine")}
           color={colors.onPrimary}

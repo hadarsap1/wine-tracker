@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as diaryService from "@services/diary";
 import { deleteImage } from "@services/storage";
-import type { AppDiaryEntry } from "@/types/index";
+import type { AppDiaryEntry, DiaryEntry } from "@/types/index";
 import * as analytics from "@services/analytics";
 
 interface DiaryState {
@@ -12,6 +12,7 @@ interface DiaryState {
 
 interface DiaryActions {
   loadEntries: (householdId: string) => Promise<void>;
+  subscribeEntries: (householdId: string) => () => void;
   addEntry: (
     householdId: string,
     entryId: string,
@@ -29,6 +30,15 @@ interface DiaryActions {
 
 export type DiaryStore = DiaryState & DiaryActions;
 
+function toAppEntry(entry: DiaryEntry): AppDiaryEntry {
+  return {
+    ...entry,
+    tastingDate: entry.tastingDate?.toDate?.() ?? new Date(),
+    createdAt: entry.createdAt?.toDate?.() ?? new Date(),
+    updatedAt: entry.updatedAt?.toDate?.() ?? new Date(),
+  } as AppDiaryEntry;
+}
+
 export const useDiaryStore = create<DiaryStore>((set, get) => ({
   entries: [],
   loading: false,
@@ -38,16 +48,19 @@ export const useDiaryStore = create<DiaryStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const entries = await diaryService.getDiaryEntries(householdId);
-      const appEntries = entries.map((entry) => ({
-        ...entry,
-        tastingDate: entry.tastingDate?.toDate?.() ?? new Date(),
-        createdAt: entry.createdAt?.toDate?.() ?? new Date(),
-        updatedAt: entry.updatedAt?.toDate?.() ?? new Date(),
-      })) as AppDiaryEntry[];
-      set({ entries: appEntries, loading: false });
+      set({ entries: entries.map(toAppEntry), loading: false });
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
     }
+  },
+
+  subscribeEntries: (householdId) => {
+    set({ loading: true, error: null });
+    return diaryService.subscribeDiaryEntries(
+      householdId,
+      (entries) => set({ entries: entries.map(toAppEntry), loading: false }),
+      (e) => set({ loading: false, error: e.message })
+    );
   },
 
   addEntry: async (householdId, entryId, data) => {

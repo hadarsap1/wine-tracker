@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as inventoryService from "@services/inventory";
 import * as diaryService from "@services/diary";
-import type { AppInventoryItem, AppWine, WineType } from "@/types/index";
+import type { AppInventoryItem, AppWine, WineType, InventoryItem } from "@/types/index";
 import * as analytics from "@services/analytics";
 
 interface InventoryState {
@@ -12,6 +12,7 @@ interface InventoryState {
 
 interface InventoryActions {
   loadItems: (householdId: string) => Promise<void>;
+  subscribeItems: (householdId: string) => () => void;
   addWine: (
     householdId: string,
     wine: inventoryService.WineFormData,
@@ -60,6 +61,15 @@ interface InventoryActions {
 
 export type InventoryStore = InventoryState & InventoryActions;
 
+function toAppItem(item: InventoryItem): AppInventoryItem {
+  return {
+    ...item,
+    createdAt: item.createdAt?.toDate?.() ?? new Date(),
+    updatedAt: item.updatedAt?.toDate?.() ?? new Date(),
+    purchaseDate: item.purchaseDate?.toDate?.() ?? undefined,
+  } as AppInventoryItem;
+}
+
 export const useInventoryStore = create<InventoryStore>((set, get) => ({
   items: [],
   loading: false,
@@ -69,16 +79,19 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const items = await inventoryService.getInventoryItems(householdId);
-      const appItems = items.map((item) => ({
-        ...item,
-        createdAt: item.createdAt?.toDate?.() ?? new Date(),
-        updatedAt: item.updatedAt?.toDate?.() ?? new Date(),
-        purchaseDate: item.purchaseDate?.toDate?.() ?? undefined,
-      })) as AppInventoryItem[];
-      set({ items: appItems, loading: false });
+      set({ items: items.map(toAppItem), loading: false });
     } catch (e) {
       set({ loading: false, error: (e as Error).message });
     }
+  },
+
+  subscribeItems: (householdId) => {
+    set({ loading: true, error: null });
+    return inventoryService.subscribeInventoryItems(
+      householdId,
+      (items) => set({ items: items.map(toAppItem), loading: false }),
+      (e) => set({ loading: false, error: e.message })
+    );
   },
 
   addWine: async (householdId, wine, inventory) => {

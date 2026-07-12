@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   orderBy,
+  onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@config/firebase";
@@ -76,6 +77,22 @@ export async function getDiaryEntries(
   const q = query(diaryCol(householdId), orderBy("tastingDate", "desc"));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as DiaryEntry);
+}
+
+/**
+ * Subscribes to live diary updates for a household. Returns an unsubscribe fn.
+ */
+export function subscribeDiaryEntries(
+  householdId: string,
+  onData: (entries: DiaryEntry[]) => void,
+  onError?: (e: Error) => void
+): () => void {
+  const q = query(diaryCol(householdId), orderBy("tastingDate", "desc"));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as DiaryEntry)),
+    (e) => onError?.(e)
+  );
 }
 
 export async function getDiaryEntry(

@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@config/theme";
+import { t } from "@i18n/index";
 
 interface HeaderBackButtonProps {
   onPress: () => void;
@@ -10,7 +11,13 @@ interface HeaderBackButtonProps {
 
 export default function HeaderBackButton({ onPress, tintColor }: HeaderBackButtonProps) {
   return (
-    <Pressable onPress={onPress} style={styles.button} hitSlop={8}>
+    <Pressable
+      onPress={onPress}
+      style={styles.button}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t.back}
+    >
       <MaterialCommunityIcons
         name="chevron-right"
         size={28}
