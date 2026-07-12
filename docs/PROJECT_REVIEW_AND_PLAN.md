@@ -8,6 +8,36 @@ This document lists every finding from a full review of the app (Expo/React Nati
 
 ---
 
+## Implementation status (updated 2026-07-12)
+
+Phases 0–3 have been implemented on branch `claude/project-review-plan-rq1spw`. Summary of what shipped vs. what remains:
+
+**Done**
+- **S1/S2/S3** — server-side `redeemInvite` Cloud Function; member self-create restricted to the household creator; invite expiry enforced in rules; client invite updates blocked; email pinned on profile updates. Proven closed by a 21-test Firestore rules suite.
+- **S4** — rate limits + payload-size caps on `analyzeLabel`, `detectLabelText`, and `vivinoProxy`; Vivino Firestore cache (30-day TTL).
+- **S5** — App Check scaffolded on web (reCAPTCHA v3, gated behind `EXPO_PUBLIC_RECAPTCHA_SITE_KEY`).
+- **S6** — Storage rules restricted to `image/*` under 5 MB.
+- **S7** — `npm audit fix` applied; `xlsx` replaced with `exceljs`; spreadsheet parsing extracted to a tested, safe module.
+- **Q1/Q2/Q3** — ESLint + typecheck + vitest; PR CI workflow; deploy workflow now ships rules + functions gated on tests. Unit tests for the parsers/import; rules test suite.
+- **Q4** — `openBottle` race fixed with a Firestore transaction.
+- **Q5** — email/password login restored; Google guarded to web with a clear message.
+- **Q7** — localized auth-error mapping; top-level `ErrorBoundary` wired to `captureError`.
+- **U1** — password reset + account deletion (Cloud Function + confirm UI).
+- **U2** — accessibility labels on back button, FABs, storage slots, settings rows (initial pass).
+- **U4** — Firestore offline persistence.
+- **U5 (partial)** — live `onSnapshot` sync for inventory + diary; analytics opt-out toggle.
+
+**Remaining (follow-up)**
+- **S8/S9** — privacy policy page; Vivino ToS hardening; drop email from analytics `$set`.
+- **Q6** — orphaned-image cleanup job; delete-consistency between wines/inventory.
+- **Q8** — prune unused deps (`expo-secure-store`, `@expo/ngrok`).
+- **U2** — full contrast/focus/dynamic-type audit across all screens.
+- **U3** — i18n migration to keyed strings (`i18next` + `expo-localization`).
+- **U5** — skeleton loaders; screen refactors of the 400+-line files.
+- **Phase 4** — native App Check (DeviceCheck/Play Integrity), native Google sign-in, Sentry, Playwright E2E.
+
+---
+
 ## 1. Security findings
 
 ### 🔴 S1 — CRITICAL: Any signed-in user can join (and become admin of) any household
