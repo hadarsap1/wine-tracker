@@ -14,7 +14,6 @@ import { db } from "@config/firebase";
 import {
   COLLECTIONS,
   type DiaryEntry,
-  type CreateDiaryEntry,
   type Rating,
   type WineType,
 } from "@/types/index";

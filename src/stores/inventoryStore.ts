@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as inventoryService from "@services/inventory";
 import * as diaryService from "@services/diary";
-import type { AppInventoryItem, AppWine, WineType, AppDiaryEntry } from "@/types/index";
+import type { AppInventoryItem, AppWine, WineType } from "@/types/index";
 import * as analytics from "@services/analytics";
 
 interface InventoryState {
@@ -158,7 +158,6 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     set({ error: null });
     try {
       const item = get().items.find((i) => i.id === itemId);
-      const qty = item?.quantity ?? 1;
       const entryId = diaryService.generateEntryId(householdId);
       // Legacy items use storageUnitId/storageRow/storageCol instead of storageSlots[]
       const isLegacySlot = !!slotToRemove && !item?.storageSlots?.length;
@@ -166,7 +165,6 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       const deleted = await inventoryService.openBottle(
         householdId,
         itemId,
-        qty,
         { entryId, wineId, wineName, wineType },
         slotToRemove,
         isLegacySlot

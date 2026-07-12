@@ -19,6 +19,7 @@ export const colors = {
   border: "#1e1e3a",
   error: "#cf6679",
   onPrimary: "#ffffff",
+  vivinoRed: "#b01e28",
 } as const;
 
 // ─── Paper Theme ────────────────────────────────────────────────────────────

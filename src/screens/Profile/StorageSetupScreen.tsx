@@ -36,7 +36,9 @@ interface UnitForm {
 
 const EMPTY_FORM: UnitForm = { name: "", type: "fridge", rows: "5", cols: "5" };
 
-export default function StorageSetupScreen({}: StorageSetupScreenProps): React.ReactElement {
+export default function StorageSetupScreen(
+  _props: StorageSetupScreenProps
+): React.ReactElement {
   const profile = useAuthStore((s) => s.profile);
   const { units, loading, loadUnits, addUnit, updateUnit, deleteUnit } =
     useCellarStore();

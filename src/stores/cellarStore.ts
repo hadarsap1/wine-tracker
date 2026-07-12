@@ -23,7 +23,7 @@ interface CellarActions {
 }
 
 export const useCellarStore = create<CellarState & CellarActions>(
-  (set, get) => ({
+  (set) => ({
     units: [],
     loading: false,
 

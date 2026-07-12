@@ -44,7 +44,7 @@ export default function EditWineScreen({
 
   const showSnackbar = useSnackbarStore((s) => s.show);
 
-  const [wine, setWine] = useState<AppWine | null>(null);
+  const [, setWine] = useState<AppWine | null>(null);
   const [loadingWine, setLoadingWine] = useState(true);
 
   const [name, setName] = useState("");

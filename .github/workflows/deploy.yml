@@ -19,6 +19,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
       - name: Build web
         run: npm run build:web
         env:
@@ -38,3 +47,17 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           projectId: winetracker2026
+
+      # Rules and functions live in this repo — deploy them together with
+      # hosting so what's live never drifts from what's reviewed.
+      - name: Deploy Firestore/Storage rules and Cloud Functions
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx firebase-tools deploy \
+            --only firestore:rules,storage,functions \
+            --project winetracker2026 \
+            --non-interactive --force
+          rm -f "$RUNNER_TEMP/firebase-sa.json"

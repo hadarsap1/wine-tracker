@@ -55,8 +55,10 @@ service cloud.firestore {
         && incomingData().householdIds is list
         && incomingData().preferences is map;
 
+      // email is pinned server-side; uid must stay the owner's uid.
       allow update: if isOwner(userId)
-        && incomingData().uid == userId;
+        && incomingData().uid == userId
+        && incomingData().email == resource.data.email;
 
       allow delete: if false;
     }
@@ -81,9 +83,19 @@ service cloud.firestore {
       match /members/{memberId} {
         allow read: if isMember(householdId);
 
-        // Admin can add members; creator can bootstrap their own membership
+        // Admin can add members. Self-creation is allowed ONLY for the
+        // household's creator (bootstrap right after creating the household).
+        // Everyone else joins via the redeemInvite Cloud Function, which
+        // validates the invite server-side with the Admin SDK.
         allow create: if isSignedIn()
-          && (isAdmin(householdId) || incomingData().userId == request.auth.uid)
+          && (
+            isAdmin(householdId)
+            || (
+              memberId == request.auth.uid
+              && incomingData().userId == request.auth.uid
+              && get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid
+            )
+          )
           && isValidString(incomingData().displayName)
           && incomingData().email is string
           && incomingData().role in ['admin', 'member'];
@@ -183,9 +195,11 @@ service cloud.firestore {
     // ── /invites/{inviteId} ───────────────────────────────────────────────
     // Any signed-in user can fetch a specific invite by ID (to validate the code).
     // Collection listing is blocked — prevents enumerating household IDs.
-    // Only household admins can create invites.
-    // Redemption (marking used + adding member) is handled via a write
-    // that any signed-in user can do to their own invite doc.
+    // Only household admins can create invites, with a bounded future expiry.
+    // Redemption is handled EXCLUSIVELY by the redeemInvite Cloud Function
+    // (Admin SDK bypasses these rules) — clients cannot update invites at all.
+    // Recommended: configure a Firestore TTL policy on `expiresAt` so stale
+    // invites are purged automatically.
 
     match /invites/{inviteId} {
       allow get: if isSignedIn();
@@ -194,14 +208,12 @@ service cloud.firestore {
       allow create: if isAdmin(incomingData().householdId)
         && isValidString(incomingData().householdId)
         && incomingData().createdBy == request.auth.uid
-        && incomingData().used == false;
+        && incomingData().used == false
+        && incomingData().expiresAt is timestamp
+        && incomingData().expiresAt > request.time
+        && incomingData().expiresAt < request.time + duration.value(7, 'd');
 
-      // Allow the redeemer to mark the invite as used — only the `used` field may change
-      allow update: if isSignedIn()
-        && resource.data.used == false
-        && incomingData().used == true
-        && incomingData().diff(resource.data).affectedKeys().hasOnly(['used']);
-
+      allow update: if false;
       allow delete: if false;
     }
 

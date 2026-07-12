@@ -9,27 +9,48 @@ const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const visionApiKey = defineSecret('GOOGLE_CLOUD_VISION_API_KEY');
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-// 500 AI scan calls per user per calendar day (UTC). Only applied to analyzeLabel (GPT-4o).
-const SCAN_DAILY_LIMIT = 500;
+// Per-user, per-bucket daily limits (UTC calendar day). Buckets share one
+// rateLimits/{uid} doc: { date, <bucket>Count }. The doc is only accessible
+// via the Admin SDK (client rules deny all access).
+const DAILY_LIMITS: Record<string, number> = {
+  scan: 100,    // analyzeLabel (GPT-4o Vision) — most expensive
+  vision: 200,  // detectLabelText (Cloud Vision OCR)
+  vivino: 500,  // vivinoProxy (free, but protects against scraping abuse)
+};
 
-async function checkScanRateLimit(userId: string): Promise<boolean> {
+async function checkRateLimit(userId: string, bucket: keyof typeof DAILY_LIMITS): Promise<boolean> {
   const db = admin.firestore();
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
   const ref = db.collection('rateLimits').doc(userId);
+  const field = `${bucket}Count`;
+  const limit = DAILY_LIMITS[bucket];
 
   return db.runTransaction(async (tx) => {
     const doc = await tx.get(ref);
     const data = doc.data();
-    if (!data || data.scanDate !== today) {
-      tx.set(ref, { scanDate: today, scanCount: 1 });
+    if (!data || data.date !== today) {
+      tx.set(ref, { date: today, [field]: 1 });
       return true;
     }
-    if ((data.scanCount as number) >= SCAN_DAILY_LIMIT) {
+    if (((data[field] as number) ?? 0) >= limit) {
       return false;
     }
-    tx.update(ref, { scanCount: admin.firestore.FieldValue.increment(1) });
+    tx.set(ref, { [field]: admin.firestore.FieldValue.increment(1) }, { merge: true });
     return true;
   });
+}
+
+// Base64 image payload cap (~3.4 MB binary). Protects Vision/OpenAI spend.
+const MAX_IMAGE_B64_LENGTH = 4_500_000;
+
+function validateImagePayload(imageBase64: unknown): string {
+  if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
+    throw new HttpsError('invalid-argument', 'imageBase64 is required.');
+  }
+  if (imageBase64.length > MAX_IMAGE_B64_LENGTH) {
+    throw new HttpsError('invalid-argument', 'Image too large. Maximum size is ~3 MB.');
+  }
+  return imageBase64;
 }
 
 // ── Vivino helpers ─────────────────────────────────────────────────────────────
@@ -273,11 +294,35 @@ export const vivinoProxy = onCall<VivinoProxyRequest, Promise<VivinoProxyRespons
     if (!query || typeof query !== 'string' || query.trim().length < 2) {
       throw new HttpsError('invalid-argument', 'query must be at least 2 characters.');
     }
+    if (query.length > 200) {
+      throw new HttpsError('invalid-argument', 'query too long.');
+    }
+
+    const allowed = await checkRateLimit(request.auth.uid, 'vivino');
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'Daily lookup limit reached. Try again tomorrow.');
+    }
+
+    // Firestore cache — cuts Vivino calls and speeds up repeat lookups.
+    const db = admin.firestore();
+    const cacheKey = `${query.trim().toLowerCase().replace(/[^a-z0-9֐-׿]+/g, '_').slice(0, 400)}__${vintage ?? 'nv'}`;
+    const cacheRef = db.collection('vivinoCache').doc(cacheKey);
+    const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
     try {
-      console.log(`[vivino] searching: query="${query}" vintage=${vintage ?? 'none'}`);
+      const cached = await cacheRef.get();
+      const cachedData = cached.data();
+      if (cachedData && Date.now() - (cachedData.fetchedAt as number) < CACHE_TTL_MS) {
+        return (cachedData.result as VivinoProxyResponse | null) ?? null;
+      }
+    } catch {
+      // Cache read failure is non-fatal — fall through to live fetch.
+    }
+
+    try {
       const result = await searchWithStrategies(query.trim(), vintage);
       console.log(`[vivino] result: ${result ? `score=${result.score} name=${result.wineName}` : 'null (not found)'}`);
+      await cacheRef.set({ result: result ?? null, fetchedAt: Date.now() }).catch(() => undefined);
       return result;
     } catch (e) {
       console.error(`[vivino] searchWithStrategies threw:`, e);
@@ -309,9 +354,11 @@ export const detectLabelText = onCall<DetectTextRequest, Promise<DetectTextRespo
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
-    const { imageBase64 } = request.data;
-    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
-      throw new HttpsError('invalid-argument', 'imageBase64 is required.');
+    const imageBase64 = validateImagePayload(request.data.imageBase64);
+
+    const allowed = await checkRateLimit(request.auth.uid, 'vision');
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'Daily scan limit reached. Try again tomorrow.');
     }
 
     const apiKey = visionApiKey.value();
@@ -404,26 +451,18 @@ export const analyzeLabel = onCall<AnalyzeLabelRequest, Promise<AnalyzeLabelResp
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
-    const { imageBase64 } = request.data;
-    const b64Len = typeof imageBase64 === 'string' ? imageBase64.length : -1;
-    console.log(`analyzeLabel: imageBase64 type=${typeof imageBase64} length=${b64Len}`);
+    const imageBase64 = validateImagePayload(request.data.imageBase64);
 
-    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 10) {
-      console.error(`analyzeLabel: imageBase64 validation failed. type=${typeof imageBase64} length=${b64Len}`);
-      throw new HttpsError('invalid-argument', 'imageBase64 is required.');
-    }
-
-    const allowed = await checkScanRateLimit(request.auth.uid);
+    const allowed = await checkRateLimit(request.auth.uid, 'scan');
     if (!allowed) {
       throw new HttpsError('resource-exhausted', 'Daily scan limit reached. Try again tomorrow.');
     }
 
     const apiKey = openaiApiKey.value();
     if (!apiKey) {
-      console.error('analyzeLabel: OPENAI_API_KEY secret is empty or not loaded. Secret name: OPENAI_API_KEY, length: 0');
+      console.error('analyzeLabel: OPENAI_API_KEY secret is empty or not loaded.');
       throw new HttpsError('unavailable', 'AI analysis not configured on server.');
     }
-    console.log(`analyzeLabel: API key loaded (length=${apiKey.length}), sending to OpenAI...`);
 
     const body = {
       model: 'gpt-4o',
@@ -506,5 +545,152 @@ Use null for any field you cannot determine from the label.`,
       region: str(parsed.region),
       country: str(parsed.country),
     };
+  }
+);
+
+// ── redeemInvite (server-side household join) ─────────────────────────────────
+// Invite validation MUST happen server-side: Firestore rules cannot atomically
+// verify an invite while creating a member doc, and client-side checks are
+// trivially bypassed. This callable is the only way to join a household.
+
+interface RedeemInviteRequest {
+  inviteId: string;
+}
+
+interface RedeemInviteResponse {
+  householdId: string;
+}
+
+export const redeemInvite = onCall<RedeemInviteRequest, Promise<RedeemInviteResponse>>(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+    const uid = request.auth.uid;
+
+    const { inviteId } = request.data;
+    if (!inviteId || typeof inviteId !== 'string' || inviteId.length > 128) {
+      throw new HttpsError('invalid-argument', 'inviteId is required.');
+    }
+
+    const db = admin.firestore();
+    const inviteRef = db.collection('invites').doc(inviteId);
+    const userRef = db.collection('users').doc(uid);
+
+    return db.runTransaction(async (tx) => {
+      const [inviteSnap, userSnap] = await Promise.all([tx.get(inviteRef), tx.get(userRef)]);
+
+      if (!inviteSnap.exists) {
+        throw new HttpsError('not-found', 'invalid_invite');
+      }
+      const invite = inviteSnap.data() as {
+        householdId: string;
+        used: boolean;
+        expiresAt: admin.firestore.Timestamp;
+      };
+
+      if (invite.used) {
+        throw new HttpsError('failed-precondition', 'invite_used');
+      }
+      if (invite.expiresAt.toMillis() < Date.now()) {
+        throw new HttpsError('failed-precondition', 'invite_expired');
+      }
+
+      const householdRef = db.collection('households').doc(invite.householdId);
+      const memberRef = householdRef.collection('members').doc(uid);
+      const [householdSnap, memberSnap] = await Promise.all([
+        tx.get(householdRef),
+        tx.get(memberRef),
+      ]);
+
+      if (!householdSnap.exists) {
+        throw new HttpsError('not-found', 'invalid_invite');
+      }
+      if (memberSnap.exists) {
+        throw new HttpsError('already-exists', 'already_member');
+      }
+
+      const profile = userSnap.data() as { displayName?: string; email?: string; householdIds?: string[] } | undefined;
+      const displayName =
+        profile?.displayName ?? request.auth?.token.name ?? request.auth?.token.email?.split('@')[0] ?? 'User';
+      const email = profile?.email ?? request.auth?.token.email ?? '';
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      tx.set(memberRef, {
+        userId: uid,
+        displayName,
+        email,
+        role: 'member',
+        joinedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      tx.update(householdRef, {
+        memberCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: now,
+      });
+      tx.update(inviteRef, { used: true, updatedAt: now });
+      if (userSnap.exists) {
+        tx.update(userRef, {
+          householdIds: admin.firestore.FieldValue.arrayUnion(invite.householdId),
+          updatedAt: now,
+        });
+      }
+
+      return { householdId: invite.householdId };
+    });
+  }
+);
+
+// ── deleteAccount (GDPR / app-store compliance) ──────────────────────────────
+// Deletes the auth user, user profile, rate-limit doc, sole-member households
+// (including all subcollections and Storage files), and membership docs in
+// shared households.
+
+export const deleteAccount = onCall<Record<string, never>, Promise<{ deleted: true }>>(
+  { cors: true, timeoutSeconds: 300 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+    const uid = request.auth.uid;
+    const db = admin.firestore();
+    const bucket = admin.storage().bucket();
+
+    const userSnap = await db.collection('users').doc(uid).get();
+    const householdIds: string[] = (userSnap.data()?.householdIds as string[] | undefined) ?? [];
+
+    for (const householdId of householdIds) {
+      const householdRef = db.collection('households').doc(householdId);
+      const membersSnap = await householdRef.collection('members').get();
+      const isSoleMember =
+        membersSnap.size === 0 || (membersSnap.size === 1 && membersSnap.docs[0].id === uid);
+
+      if (isSoleMember) {
+        // Delete the whole household tree + its uploaded files.
+        await db.recursiveDelete(householdRef);
+        await bucket
+          .deleteFiles({ prefix: `households/${householdId}/` })
+          .catch((e) => console.warn(`deleteAccount: storage cleanup failed for ${householdId}`, e));
+      } else {
+        await householdRef.collection('members').doc(uid).delete();
+        await householdRef
+          .update({
+            memberCount: admin.firestore.FieldValue.increment(-1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    await bucket
+      .deleteFiles({ prefix: `users/${uid}/` })
+      .catch((e) => console.warn(`deleteAccount: user storage cleanup failed`, e));
+    await db.collection('rateLimits').doc(uid).delete().catch(() => undefined);
+    await db.collection('users').doc(uid).delete().catch(() => undefined);
+    await admin.auth().deleteUser(uid);
+
+    return { deleted: true };
   }
 );

@@ -13,7 +13,6 @@ import {
   Divider,
   IconButton,
 } from "react-native-paper";
-import * as XLSX from "xlsx";
 import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
@@ -21,97 +20,14 @@ import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import { WineType } from "@/types/index";
+import {
+  COLUMN_ALIASES,
+  detectColumn,
+  parseImportRows,
+  type ParsedImportRow as ParsedRow,
+} from "@utils/importWines";
+import { parseSpreadsheetFile } from "@utils/parseSpreadsheet";
 import type { ImportExcelScreenProps } from "@navigation/types";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface ParsedRow {
-  name: string;
-  producer?: string;
-  type?: WineType;
-  vintage?: number;
-  grape?: string;
-  region?: string;
-  country?: string;
-  quantity: number;
-  purchasePrice?: number;
-}
-
-// ─── Column detection helpers ─────────────────────────────────────────────────
-
-const COLUMN_ALIASES: Record<keyof ParsedRow, string[]> = {
-  name: ["name", "שם", "wine", "יין", "שם יין"],
-  producer: ["producer", "יצרן", "winery", "bodega"],
-  type: ["type", "סוג", "wine type", "סוג יין"],
-  vintage: ["vintage", "בציר", "year", "שנה"],
-  grape: ["grape", "זן", "varietal", "variety", "זן ענב"],
-  region: ["region", "אזור", "appellation"],
-  country: ["country", "מדינה"],
-  quantity: ["quantity", "כמות", "qty", "bottles", "בקבוקים"],
-  purchasePrice: ["price", "מחיר", "purchase price", "מחיר רכישה", "cost"],
-};
-
-const WINE_TYPE_ALIASES: Record<string, WineType> = {
-  red: WineType.Red, אדום: WineType.Red,
-  white: WineType.White, לבן: WineType.White,
-  "rosé": WineType.Rosé, rose: WineType.Rosé, רוזה: WineType.Rosé,
-  sparkling: WineType.Sparkling, מבעבע: WineType.Sparkling,
-  dessert: WineType.Dessert, קינוח: WineType.Dessert,
-  fortified: WineType.Fortified, מועשר: WineType.Fortified,
-  orange: WineType.Orange, כתום: WineType.Orange,
-  other: WineType.Other, אחר: WineType.Other,
-};
-
-function detectColumn(headers: string[]): Record<keyof ParsedRow, number | undefined> {
-  const result = {} as Record<keyof ParsedRow, number | undefined>;
-  for (const [field, aliases] of Object.entries(COLUMN_ALIASES) as [keyof ParsedRow, string[]][]) {
-    result[field] = headers.findIndex((h) =>
-      aliases.some((a) => h.toLowerCase().trim() === a.toLowerCase())
-    );
-    if (result[field] === -1) result[field] = undefined;
-  }
-  return result;
-}
-
-function parseWineType(raw: string): WineType | undefined {
-  if (!raw) return undefined;
-  return WINE_TYPE_ALIASES[raw.toLowerCase().trim()];
-}
-
-function parseRows(
-  rows: unknown[][],
-  colMap: Record<keyof ParsedRow, number | undefined>
-): ParsedRow[] {
-  const result: ParsedRow[] = [];
-  for (const row of rows) {
-    const get = (field: keyof ParsedRow): string => {
-      const idx = colMap[field];
-      if (idx === undefined) return "";
-      const cell = row[idx];
-      return cell != null ? String(cell).trim() : "";
-    };
-
-    const name = get("name");
-    if (!name) continue;
-
-    const vintageRaw = parseInt(get("vintage"), 10);
-    const qtyRaw = parseInt(get("quantity"), 10);
-    const priceRaw = parseFloat(get("purchasePrice"));
-
-    result.push({
-      name,
-      producer: get("producer") || undefined,
-      type: parseWineType(get("type")),
-      vintage: !isNaN(vintageRaw) && vintageRaw > 1900 ? vintageRaw : undefined,
-      grape: get("grape") || undefined,
-      region: get("region") || undefined,
-      country: get("country") || undefined,
-      quantity: !isNaN(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1,
-      purchasePrice: !isNaN(priceRaw) && priceRaw > 0 ? priceRaw : undefined,
-    });
-  }
-  return result;
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -138,20 +54,17 @@ export default function ImportExcelScreen({ navigation }: ImportExcelScreenProps
     setRows([]);
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
-        const data = evt.target?.result;
-        let workbook: XLSX.WorkBook;
+        const data = evt.target?.result as ArrayBuffer;
+        let raw: unknown[][];
         try {
-          workbook = XLSX.read(data, { type: "array" });
+          raw = await parseSpreadsheetFile(data, file.name);
         } catch {
           setParseError(t.importExcelBadFormat);
           setParsing(false);
           return;
         }
-
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
 
         if (raw.length < 2) {
           setParseError(t.importExcelEmptySheet);
@@ -159,7 +72,7 @@ export default function ImportExcelScreen({ navigation }: ImportExcelScreenProps
           return;
         }
 
-        const headers = (raw[0] as unknown[]).map((h) => String(h ?? ""));
+        const headers = raw[0].map((h) => String(h ?? ""));
         const colMap = detectColumn(headers);
 
         if (colMap.name === undefined) {
@@ -170,7 +83,7 @@ export default function ImportExcelScreen({ navigation }: ImportExcelScreenProps
           return;
         }
 
-        const parsed = parseRows(raw.slice(1) as unknown[][], colMap);
+        const parsed = parseImportRows(raw.slice(1), colMap);
 
         if (parsed.length === 0) {
           setParseError(t.importExcelNoRows);
@@ -257,7 +170,7 @@ export default function ImportExcelScreen({ navigation }: ImportExcelScreenProps
       <input
         ref={fileInputRef}
         type="file"
-        accept=".xlsx,.xls,.csv"
+        accept=".xlsx,.csv"
         style={{ display: "none" }}
         onChange={handleFileChange}
       />

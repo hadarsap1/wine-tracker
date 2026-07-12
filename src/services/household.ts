@@ -87,8 +87,11 @@ export async function getHousehold(
 /**
  * Ensures a member document exists for the given user in the given household.
  * This is a no-op if the document already exists.
- * Fixes users created before the email validation rule change whose member doc
- * was never written, causing isMember() to always return false.
+ *
+ * NOTE: security rules only allow self-creation for the household's CREATOR
+ * (as admin). For households joined via invite, the member doc is created
+ * server-side by the redeemInvite Cloud Function, so the setDoc below fails
+ * harmlessly — which is why errors are swallowed.
  */
 export async function ensureMemberExists(
   householdId: string,

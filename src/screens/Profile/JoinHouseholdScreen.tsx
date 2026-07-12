@@ -29,12 +29,7 @@ export default function JoinHouseholdScreen({
 
     setJoining(true);
     try {
-      await inviteService.redeemInvite(
-        trimmed,
-        user.uid,
-        profile.displayName,
-        profile.email
-      );
+      await inviteService.redeemInvite(trimmed);
       await reloadProfile();
       analytics.track.householdJoined();
       showSnackbar(t.joinSuccess, "success");

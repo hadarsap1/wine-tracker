@@ -10,6 +10,7 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
+  runTransaction,
   increment,
   deleteField,
   arrayRemove,
@@ -21,8 +22,6 @@ import {
   type VivinoData,
   type InventoryItem,
   type InventoryStatus,
-  type CreateWine,
-  type CreateInventoryItem,
   type WineType,
   type Rating,
   type StorageSlot,
@@ -282,20 +281,19 @@ export async function getWines(householdId: string): Promise<Wine[]> {
 
 /**
  * Atomically decrements (or removes) inventory item AND creates a diary entry.
- * Uses a batch so both writes succeed or fail together.
- * Returns whether the inventory item was deleted (quantity was 1).
+ * Runs in a transaction that reads the CURRENT quantity server-side, so two
+ * household members opening bottles concurrently can't drive quantity negative
+ * or double-delete the item.
+ * Returns whether the inventory item was deleted (server quantity was <= 1).
  */
 export async function openBottle(
   householdId: string,
   itemId: string,
-  currentQuantity: number,
   diary: { entryId: string; wineId: string; wineName: string; wineType: WineType },
   slotToRemove?: StorageSlot,
   /** Pass true when the item uses legacy storageUnitId/storageRow/storageCol fields (not storageSlots[]) */
   isLegacySlot?: boolean
 ): Promise<boolean> {
-  const batch = writeBatch(db);
-
   const itemRef = doc(
     db,
     COLLECTIONS.households,
@@ -303,26 +301,6 @@ export async function openBottle(
     COLLECTIONS.inventoryItems,
     itemId
   );
-
-  const deleted = currentQuantity <= 1;
-  if (deleted) {
-    batch.delete(itemRef);
-  } else {
-    const updateData: Record<string, unknown> = { quantity: increment(-1), updatedAt: serverTimestamp() };
-    if (slotToRemove) {
-      if (isLegacySlot) {
-        // Legacy single-slot item: clear the individual fields
-        updateData.storageUnitId = deleteField();
-        updateData.storageRow = deleteField();
-        updateData.storageCol = deleteField();
-      } else {
-        // New storageSlots[] format: remove just this slot from the array
-        updateData.storageSlots = arrayRemove(slotToRemove);
-      }
-    }
-    batch.update(itemRef, updateData);
-  }
-
   const diaryRef = doc(
     db,
     COLLECTIONS.households,
@@ -330,20 +308,50 @@ export async function openBottle(
     COLLECTIONS.diaryEntries,
     diary.entryId
   );
-  batch.set(diaryRef, {
-    wineId: diary.wineId,
-    wineName: diary.wineName,
-    wineType: diary.wineType,
-    rating: null as Rating | null,
-    imageUrls: [],
-    inventoryItemId: itemId,
-    tastingDate: serverTimestamp(),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
 
-  await batch.commit();
-  return deleted;
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(itemRef);
+    if (!snap.exists()) {
+      throw new Error("item_not_found");
+    }
+    const currentQuantity = (snap.data().quantity as number) ?? 0;
+
+    const deleted = currentQuantity <= 1;
+    if (deleted) {
+      tx.delete(itemRef);
+    } else {
+      const updateData: Record<string, unknown> = {
+        quantity: increment(-1),
+        updatedAt: serverTimestamp(),
+      };
+      if (slotToRemove) {
+        if (isLegacySlot) {
+          // Legacy single-slot item: clear the individual fields
+          updateData.storageUnitId = deleteField();
+          updateData.storageRow = deleteField();
+          updateData.storageCol = deleteField();
+        } else {
+          // New storageSlots[] format: remove just this slot from the array
+          updateData.storageSlots = arrayRemove(slotToRemove);
+        }
+      }
+      tx.update(itemRef, updateData);
+    }
+
+    tx.set(diaryRef, {
+      wineId: diary.wineId,
+      wineName: diary.wineName,
+      wineType: diary.wineType,
+      rating: null as Rating | null,
+      imageUrls: [],
+      inventoryItemId: itemId,
+      tastingDate: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return deleted;
+  });
 }
 
 export async function createWineOnly(

@@ -1,16 +1,13 @@
 import {
   doc,
   collection,
-  getDoc,
   setDoc,
-  updateDoc,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "@config/firebase";
-import { COLLECTIONS, HouseholdRole, type HouseholdInvite } from "@/types/index";
-import * as userService from "@services/user";
-import * as householdService from "@services/household";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "@config/firebase";
+import { COLLECTIONS } from "@/types/index";
 
 function invitesCol() {
   return collection(db, COLLECTIONS.invites);
@@ -35,56 +32,21 @@ export async function createInvite(
   return ref.id;
 }
 
-export async function redeemInvite(
-  code: string,
-  uid: string,
-  displayName: string,
-  email: string
-): Promise<string> {
-  const ref = doc(db, COLLECTIONS.invites, code);
-  const snap = await getDoc(ref);
+const redeemInviteFn = httpsCallable<{ inviteId: string }, { householdId: string }>(
+  functions,
+  "redeemInvite"
+);
 
-  if (!snap.exists()) throw new Error("invalid_invite");
-
-  const invite = { id: snap.id, ...snap.data() } as HouseholdInvite;
-
-  if (invite.used) throw new Error("invite_used");
-
-  const now = Timestamp.now();
-  if (invite.expiresAt.seconds < now.seconds) throw new Error("invite_expired");
-
-  const profile = await userService.getUserProfile(uid);
-  if (profile?.householdIds?.includes(invite.householdId)) {
-    throw new Error("already_member");
-  }
-
-  // Add user as member
-  const memberRef = doc(
-    db,
-    COLLECTIONS.households,
-    invite.householdId,
-    COLLECTIONS.members,
-    uid
-  );
-  await setDoc(memberRef, {
-    userId: uid,
-    displayName,
-    email,
-    role: HouseholdRole.Member,
-    joinedAt: serverTimestamp(),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  // Add householdId to user profile
-  const currentIds = profile?.householdIds ?? [];
-  await userService.updateUserHouseholdIds(uid, [
-    ...currentIds,
-    invite.householdId,
-  ]);
-
-  // Mark invite as used
-  await updateDoc(ref, { used: true, updatedAt: serverTimestamp() });
-
-  return invite.householdId;
+/**
+ * Redeems an invite via the server-side Cloud Function.
+ * All validation (exists / unused / unexpired) and the membership write happen
+ * atomically with the Admin SDK — client-side redemption was removed because
+ * Firestore rules cannot enforce invite validity on member creation.
+ *
+ * Throws errors whose message is one of:
+ * "invalid_invite" | "invite_used" | "invite_expired" | "already_member"
+ */
+export async function redeemInvite(code: string): Promise<string> {
+  const result = await redeemInviteFn({ inviteId: code });
+  return result.data.householdId;
 }

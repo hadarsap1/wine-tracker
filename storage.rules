@@ -2,15 +2,31 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Uploads must be images and at most 5 MB.
+    // Deletes have no request.resource, so they're exempt from those checks.
+    function isValidUpload() {
+      return request.resource == null
+        || (
+          request.resource.size < 5 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*')
+        );
+    }
+
     // Authenticated users can read/write their own uploads
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && isValidUpload();
     }
 
     // Only household members can read/write household uploads
     match /households/{householdId}/{allPaths=**} {
-      allow read, write: if request.auth != null
+      allow read: if request.auth != null
         && firestore.exists(/databases/(default)/documents/households/$(householdId)/members/$(request.auth.uid));
+      allow write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/households/$(householdId)/members/$(request.auth.uid))
+        && isValidUpload();
     }
   }
 }

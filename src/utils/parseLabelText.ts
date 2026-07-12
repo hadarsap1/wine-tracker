@@ -188,7 +188,7 @@ function extractCountryRegion(text: string): { country?: string; region?: string
 
 // Patterns that indicate OCR noise, not wine name/producer
 const NOISE_PATTERNS = [
-  /^\d+[\.,]?\d*\s*%/,           // alcohol/volume: "13.5%", "135%", "14% vol"
+  /^\d+[.,]?\d*\s*%/,            // alcohol/volume: "13.5%", "135%", "14% vol"
   /^\s*vol\.?\s*$/i,              // "vol" or "vol." as the entire line
   /^\d+(\.\d+)?\s*(cl|ml|l)\b/i, // bottle size: "75cl", "750ml"
   /^e\s*\d/i,                    // "e 75cl"

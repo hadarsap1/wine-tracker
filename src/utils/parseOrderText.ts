@@ -98,7 +98,7 @@ function cleanName(text: string): string {
     .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .replace(/^[\s\-•·*\d.]+/, "")
-    .replace(/[\s\-]+$/, "")
+    .replace(/[\s-]+$/, "")
     .trim();
 }
 

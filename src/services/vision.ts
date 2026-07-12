@@ -14,7 +14,7 @@ async function imageUriToBase64(imageUri: string): Promise<string> {
   // On native (iOS/Android), FileReader is not available — use expo-file-system
   if (typeof FileReader === 'undefined') {
     // Dynamic import so web builds don't bundle expo-file-system unnecessarily
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const FileSystem = require('expo-file-system') as { readAsStringAsync: (uri: string, opts: { encoding: string }) => Promise<string> };
     return await FileSystem.readAsStringAsync(imageUri, { encoding: 'base64' });
   }
