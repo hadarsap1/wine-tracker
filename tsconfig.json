@@ -16,5 +16,7 @@
       "@navigation/*": ["src/navigation/*"],
       "@i18n/*": ["src/i18n/*"]
     }
-  }
+  },
+  "include": ["App.tsx", "index.ts", "src", "tests"],
+  "exclude": ["node_modules", "dist", "functions", "scripts", "web", "public"]
 }
