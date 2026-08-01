@@ -22,9 +22,6 @@ export default function InventoryCard({ item, onPress }: InventoryCardProps): Re
       accessibilityLabel={`${item.wineName}, ${item.quantity} ${item.quantity === 1 ? t.bottle : t.bottles}`}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
-      {/* Crimson accent bar on the leading edge (design mockup) */}
-      <View style={styles.accentBar} />
-
       <View style={styles.bottleWell}>
         <MaterialCommunityIcons name="bottle-wine" size={26} color={colors.gold} />
       </View>
@@ -89,19 +86,15 @@ const styles = StyleSheet.create({
     // Gold rim-light — the signature outline from the design mockups.
     borderWidth: 1,
     borderColor: colors.goldHairline,
+    // Crimson accent on the leading edge. borderStart* is direction-aware, so
+    // it lands on the right in RTL (absolute positioning did not).
+    borderStartWidth: 4,
+    borderStartColor: colors.primary,
     overflow: "hidden",
     ...cardShadow,
   },
   cardPressed: {
     opacity: 0.75,
-  },
-  accentBar: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    insetInlineStart: 0,
-    width: 4,
-    backgroundColor: colors.primary,
   },
   bottleWell: {
     width: 46,
@@ -127,13 +120,13 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   metaRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginTop: 2,
   },
   locationRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 3,
     flexShrink: 1,
@@ -160,7 +153,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   onTheWayPill: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 4,
     backgroundColor: colors.goldSoft,

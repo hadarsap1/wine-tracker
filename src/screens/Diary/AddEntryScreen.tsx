@@ -14,6 +14,7 @@ import * as diaryService from "@services/diary";
 import { uploadImage, deleteImage, diaryImagePath } from "@services/storage";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
+import { formatDateLong } from "@utils/formatDate";
 import { RatingInput, ImagePickerSection } from "@components/diary";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { AddEntryScreenProps, SelectedWine } from "@navigation/types";
@@ -36,7 +37,7 @@ export default function AddEntryScreen({
   const [saving, setSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
 
-  const todayStr = new Date().toLocaleDateString();
+  const todayStr = formatDateLong(new Date());
 
   const handleSelectWine = () => {
     navigation.navigate("SelectWine");

@@ -3,6 +3,7 @@ import { View, Image, Pressable, StyleSheet } from "react-native";
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, radius, cardShadow } from "@config/theme";
+import { formatDateRelative } from "@utils/formatDate";
 import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import RatingInput from "./RatingInput";
@@ -14,10 +15,7 @@ interface DiaryCardProps {
 }
 
 export default function DiaryCard({ entry, onPress }: DiaryCardProps): React.ReactElement {
-  const dateStr =
-    entry.tastingDate instanceof Date
-      ? entry.tastingDate.toLocaleDateString()
-      : "";
+  const dateStr = formatDateRelative(entry.tastingDate as Date);
 
   return (
     <Pressable
@@ -112,7 +110,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
@@ -120,7 +118,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tapToRateRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },

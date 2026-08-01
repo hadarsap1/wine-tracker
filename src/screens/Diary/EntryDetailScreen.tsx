@@ -11,6 +11,7 @@ import { useDiaryStore } from "@stores/diaryStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
+import { formatDateLong } from "@utils/formatDate";
 import { RatingInput } from "@components/diary";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import type { EntryDetailScreenProps } from "@navigation/types";
@@ -42,7 +43,7 @@ export default function EntryDetailScreen({
 
   const dateStr =
     entry.tastingDate instanceof Date
-      ? entry.tastingDate.toLocaleDateString()
+      ? formatDateLong(entry.tastingDate as Date)
       : "";
 
   const handleDelete = async () => {

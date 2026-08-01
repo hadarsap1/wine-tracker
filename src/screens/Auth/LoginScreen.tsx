@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   featureRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
