@@ -20,6 +20,52 @@ export const colors = {
   error: "#cf6679",
   onPrimary: "#ffffff",
   vivinoRed: "#b01e28",
+
+  // Elevated surface for cards that sit on `background` — slightly lifted so
+  // cards read as objects rather than flat regions.
+  cardElevated: "#191934",
+  // Hairline gold used for card outlines (the signature look from the design
+  // mockups). Kept low-alpha so it reads as a rim-light, not a hard border.
+  goldHairline: "rgba(201, 168, 76, 0.28)",
+  goldSoft: "rgba(201, 168, 76, 0.14)",
+  crimsonSoft: "rgba(139, 26, 46, 0.22)",
+} as const;
+
+// ─── Design Tokens ──────────────────────────────────────────────────────────
+// Shared scale so screens stop inventing their own radii/spacing/shadows.
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  pill: 999,
+} as const;
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+} as const;
+
+/** Soft drop shadow that gives cards depth against the dark background. */
+export const cardShadow = {
+  shadowColor: "#000000",
+  shadowOpacity: 0.45,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 5,
+} as const;
+
+/** Crimson glow used behind the primary FAB, per the design mockups. */
+export const primaryGlow = {
+  shadowColor: colors.primary,
+  shadowOpacity: 0.75,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 0 },
+  elevation: 12,
 } as const;
 
 // ─── Paper Theme ────────────────────────────────────────────────────────────

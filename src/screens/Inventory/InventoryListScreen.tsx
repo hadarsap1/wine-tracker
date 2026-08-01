@@ -5,7 +5,7 @@ import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import { useCellarStore } from "@stores/cellarStore";
 import * as inventoryService from "@services/inventory";
-import { colors } from "@config/theme";
+import { colors, primaryGlow } from "@config/theme";
 import { t } from "@i18n/index";
 import EmptyState from "@components/common/EmptyState";
 import InventoryCard from "@components/inventory/InventoryCard";
@@ -534,11 +534,15 @@ const styles = StyleSheet.create({
   },
   fab: {
     backgroundColor: colors.primary,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    ...primaryGlow,
   },
   fabSecondary: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.cardElevated,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.goldHairline,
   },
   dialog: {
     backgroundColor: colors.card,

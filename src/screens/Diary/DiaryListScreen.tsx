@@ -3,7 +3,7 @@ import { View, FlatList, StyleSheet } from "react-native";
 import { FAB, Searchbar, ActivityIndicator } from "react-native-paper";
 import { useAuthStore } from "@stores/authStore";
 import { useDiaryStore } from "@stores/diaryStore";
-import { colors } from "@config/theme";
+import { colors, primaryGlow } from "@config/theme";
 import { t } from "@i18n/index";
 import EmptyState from "@components/common/EmptyState";
 import { DiaryCard } from "@components/diary";
@@ -130,5 +130,9 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 16,
     backgroundColor: colors.primary,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    ...primaryGlow,
   },
 });

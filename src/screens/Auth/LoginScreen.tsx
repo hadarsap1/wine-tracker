@@ -11,7 +11,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@stores/authStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
-import { colors } from "@config/theme";
+import { colors, radius, primaryGlow } from "@config/theme";
 import { t } from "@i18n/index";
 import { authErrorMessage } from "@utils/authErrors";
 import type { LoginScreenProps } from "@navigation/types";
@@ -166,6 +166,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           autoComplete="email"
           left={<TextInput.Icon icon="email-outline" />}
           style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={colors.gold}
           accessibilityLabel={t.email}
         />
         <TextInput
@@ -186,6 +188,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             />
           }
           style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={colors.gold}
           accessibilityLabel={t.password}
           onSubmitEditing={handleEmailSignIn}
         />
@@ -202,6 +206,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           buttonColor={colors.primary}
           textColor={colors.onPrimary}
           contentStyle={styles.buttonContent}
+          style={styles.emailSubmit}
           accessibilityLabel={t.signInWithEmail}
         >
           {t.signIn}
@@ -348,8 +353,12 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   input: {
-    marginBottom: 4,
-    backgroundColor: colors.card,
+    marginBottom: 8,
+    backgroundColor: colors.cardElevated,
+  },
+  inputOutline: {
+    borderRadius: radius.xl,
+    borderColor: colors.goldHairline,
   },
   buttonContent: {
     paddingVertical: 6,
@@ -369,7 +378,15 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   googleButton: {
-    borderColor: colors.border,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    ...primaryGlow,
+  },
+  emailSubmit: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.goldHairline,
   },
   signupLink: {
     marginTop: 12,

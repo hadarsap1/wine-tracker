@@ -2,7 +2,7 @@ import React from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@config/theme";
+import { colors, radius, cardShadow } from "@config/theme";
 import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import RatingInput from "./RatingInput";
@@ -20,7 +20,12 @@ export default function DiaryCard({ entry, onPress }: DiaryCardProps): React.Rea
       : "";
 
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={entry.wineName}
+    >
       {entry.imageUrls?.[0] ? (
         <Image source={{ uri: entry.imageUrls[0] }} style={styles.thumb} />
       ) : (
@@ -64,39 +69,50 @@ export default function DiaryCard({ entry, onPress }: DiaryCardProps): React.Rea
 const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: colors.cardElevated,
+    borderRadius: radius.lg,
     padding: 12,
     marginHorizontal: 16,
-    marginVertical: 6,
+    marginVertical: 5,
     gap: 12,
     alignItems: "center",
-    borderStartWidth: 3,
-    borderStartColor: colors.primary,
+    // Gold outline — diary entries are the "keepsake" surface in the mockups.
+    borderWidth: 1,
+    borderColor: colors.goldHairline,
+    ...cardShadow,
+  },
+  cardPressed: {
+    opacity: 0.75,
   },
   thumb: {
     width: 60,
     height: 60,
-    borderRadius: 8,
+    borderRadius: radius.md,
     backgroundColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.goldSoft,
   },
   thumbPlaceholder: {
     width: 60,
     height: 60,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.crimsonSoft,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.goldSoft,
   },
   content: {
     flex: 1,
     gap: 4,
   },
   name: {
-    color: colors.text,
+    color: colors.gold,
+    fontWeight: "700",
+    textAlign: "right",
   },
   row: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
   },
@@ -104,7 +120,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tapToRateRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 4,
   },

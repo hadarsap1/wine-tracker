@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Pressable, View } from "react-native";
-import { Card, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@config/theme";
+import { colors, radius, cardShadow } from "@config/theme";
 import { t } from "@i18n/index";
 import type { AppInventoryItem } from "@/types/index";
 import WineTypeChip from "./WineTypeChip";
@@ -13,109 +13,164 @@ interface InventoryCardProps {
 }
 
 export default function InventoryCard({ item, onPress }: InventoryCardProps): React.ReactElement {
+  const onTheWay = (item.status ?? "in_stock") === "on_the_way";
+
   return (
-    <Pressable onPress={onPress}>
-      <Card style={styles.card}>
-        <Card.Content style={styles.content}>
-          <View style={styles.left}>
-            <Text variant="titleMedium" style={styles.name} numberOfLines={1}>
-              {item.wineName}
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.wineName}, ${item.quantity} ${item.quantity === 1 ? t.bottle : t.bottles}`}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      {/* Crimson accent bar on the leading edge (design mockup) */}
+      <View style={styles.accentBar} />
+
+      <View style={styles.bottleWell}>
+        <MaterialCommunityIcons name="bottle-wine" size={26} color={colors.gold} />
+      </View>
+
+      <View style={styles.left}>
+        <Text variant="titleMedium" style={styles.name} numberOfLines={1}>
+          {item.wineName}
+        </Text>
+        {item.producerName ? (
+          <Text variant="bodySmall" style={styles.producer} numberOfLines={1}>
+            {item.producerName}
+          </Text>
+        ) : null}
+        <View style={styles.metaRow}>
+          <WineTypeChip type={item.wineType} compact />
+          {item.location ? (
+            <View style={styles.locationRow}>
+              <MaterialCommunityIcons
+                name="map-marker"
+                size={11}
+                color={colors.textSecondary}
+              />
+              <Text variant="bodySmall" style={styles.locationText} numberOfLines={1}>
+                {item.location}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={styles.right}>
+        {onTheWay ? (
+          <View style={styles.onTheWayPill}>
+            <MaterialCommunityIcons name="truck-fast-outline" size={12} color={colors.gold} />
+            <Text variant="labelSmall" style={styles.onTheWayText}>
+              {t.onTheWay}
             </Text>
-            {item.producerName ? (
-              <Text variant="bodySmall" style={styles.producer} numberOfLines={1}>
-                {item.producerName}
-              </Text>
-            ) : null}
-            <WineTypeChip type={item.wineType} compact />
-            {item.location ? (
-              <View style={styles.locationRow}>
-                <Text variant="bodySmall" style={styles.locationText} numberOfLines={1}>
-                  {item.location}
-                </Text>
-                <MaterialCommunityIcons
-                  name="map-marker"
-                  size={12}
-                  color={colors.textSecondary}
-                />
-              </View>
-            ) : null}
           </View>
-          <View style={styles.right}>
-            {(item.status ?? "in_stock") === "on_the_way" ? (
-              <Text variant="labelSmall" style={styles.onTheWay}>
-                {t.onTheWay}
-              </Text>
-            ) : (
-              <>
-                <Text variant="headlineSmall" style={styles.quantity}>
-                  {item.quantity}
-                </Text>
-                <Text variant="labelSmall" style={styles.quantityLabel}>
-                  {item.quantity === 1 ? t.bottle : t.bottles}
-                </Text>
-              </>
-            )}
+        ) : (
+          <View style={styles.qtyPill}>
+            <Text variant="labelLarge" style={styles.qtyText}>
+              ×{item.quantity}
+            </Text>
           </View>
-        </Card.Content>
-      </Card>
+        )}
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.card,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 10,
-    borderStartWidth: 3,
-    borderStartColor: colors.primary,
-    overflow: "hidden",
-  },
-  content: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
+    gap: 12,
+    backgroundColor: colors.cardElevated,
+    marginHorizontal: 16,
+    marginVertical: 5,
+    borderRadius: radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    // Gold rim-light — the signature outline from the design mockups.
+    borderWidth: 1,
+    borderColor: colors.goldHairline,
+    overflow: "hidden",
+    ...cardShadow,
+  },
+  cardPressed: {
+    opacity: 0.75,
+  },
+  accentBar: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    insetInlineStart: 0,
+    width: 4,
+    backgroundColor: colors.primary,
+  },
+  bottleWell: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    backgroundColor: colors.crimsonSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.goldSoft,
   },
   left: {
     flex: 1,
-    gap: 6,
-    marginEnd: 12,
+    gap: 3,
   },
   name: {
     color: colors.text,
     textAlign: "right",
+    fontWeight: "700",
   },
   producer: {
     color: colors.textSecondary,
     textAlign: "right",
-    marginTop: -2,
+  },
+  metaRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
   },
   locationRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 4,
-    alignSelf: "flex-start",
+    gap: 3,
+    flexShrink: 1,
   },
   locationText: {
     color: colors.textSecondary,
     flexShrink: 1,
     textAlign: "right",
+    fontSize: 11,
   },
   right: {
     alignItems: "center",
-    minWidth: 48,
   },
-  quantity: {
+  qtyPill: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    minWidth: 44,
+    alignItems: "center",
+  },
+  qtyText: {
+    color: "#2a1e05",
+    fontWeight: "800",
+  },
+  onTheWayPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.goldSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.goldHairline,
+  },
+  onTheWayText: {
     color: colors.gold,
-    fontWeight: "bold",
-  },
-  quantityLabel: {
-    color: colors.textSecondary,
-  },
-  onTheWay: {
-    color: colors.gold,
-    fontStyle: "italic",
   },
 });
