@@ -18,6 +18,24 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { Platform } from 'react-native';
 import { env } from './env';
 
+/**
+ * Records a fatal initialization failure instead of throwing at module load.
+ *
+ * Firebase init runs while the module graph is still being evaluated — before
+ * React mounts — so a throw here bypasses the ErrorBoundary entirely and leaves
+ * the user staring at a blank white page with no explanation. (A malformed
+ * EXPO_PUBLIC_FIREBASE_API_KEY does exactly this.) Capturing the error lets
+ * App.tsx render an actionable message instead.
+ */
+export let firebaseInitError: Error | null = null;
+
+function recordInitError(e: unknown): void {
+  if (!firebaseInitError) {
+    firebaseInitError = e instanceof Error ? e : new Error(String(e));
+  }
+  console.error('[firebase] initialization failed:', e);
+}
+
 const app = getApps().length === 0 ? initializeApp(env.firebase) : getApp();
 
 // Initialize App Check on web when a reCAPTCHA site key is configured.
@@ -33,17 +51,24 @@ if (Platform.OS === 'web' && typeof document !== 'undefined' && env.recaptchaSit
 }
 
 function createAuth() {
-  if (Platform.OS === 'web') {
-    return getAuth(app);
+  try {
+    if (Platform.OS === 'web') {
+      return getAuth(app);
+    }
+    const { getReactNativePersistence } = require('@firebase/auth');
+    const ReactNativeAsyncStorage = require('@react-native-async-storage/async-storage').default;
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    });
+  } catch (e) {
+    recordInitError(e);
+    return null;
   }
-  const { getReactNativePersistence } = require('@firebase/auth');
-  const ReactNativeAsyncStorage = require('@react-native-async-storage/async-storage').default;
-  return initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-  });
 }
 
-export const auth = createAuth();
+// Non-null for callers: when init fails, App.tsx renders the config-error screen
+// and no consumer of `auth` is ever reached.
+export const auth = createAuth() as NonNullable<ReturnType<typeof getAuth>>;
 
 // Enable offline persistence so cached data is available without a connection
 // and writes are queued while offline — important for a cellar app used in
@@ -59,8 +84,15 @@ function createDb() {
       ),
     });
   } catch (e) {
+    // Private browsing, unsupported storage, or an already-started Firestore.
+    // Offline caching is a nice-to-have — never let it break the app.
     console.warn('[firebase] persistent cache unavailable, using default:', e);
-    return getFirestore(app);
+    try {
+      return getFirestore(app);
+    } catch (inner) {
+      recordInitError(inner);
+      return null as unknown as ReturnType<typeof getFirestore>;
+    }
   }
 }
 

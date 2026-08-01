@@ -100,8 +100,12 @@ export default function ProfileMainScreen({
     try {
       await deleteAccount();
       // On success the auth listener clears state and routes back to Login.
-    } catch {
-      setDeleteError(t.deleteAccountFailed);
+    } catch (e) {
+      setDeleteError(
+        (e as Error).message === "delete_unavailable"
+          ? t.deleteAccountUnavailable
+          : t.deleteAccountFailed
+      );
       setDeleting(false);
     }
   };

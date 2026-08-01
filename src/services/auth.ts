@@ -75,7 +75,17 @@ const deleteAccountFn = httpsCallable<Record<string, never>, { deleted: true }>(
  * server-side deleteAccount Cloud Function, then signs out locally.
  */
 export async function deleteAccount(): Promise<void> {
-  await deleteAccountFn({});
+  try {
+    await deleteAccountFn({});
+  } catch (e) {
+    // Distinguish "server-side deletion isn't available" from a real failure so
+    // the UI can say something truthful instead of a generic error.
+    const code = (e as { code?: string })?.code;
+    if (code === "functions/not-found" || code === "functions/unimplemented") {
+      throw new Error("delete_unavailable");
+    }
+    throw e;
+  }
   await firebaseSignOut(auth).catch(() => undefined);
 }
 

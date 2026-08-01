@@ -25,6 +25,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
   const [formError, setFormError] = useState("");
 
   const [resetVisible, setResetVisible] = useState(false);
@@ -118,6 +119,40 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       </View>
 
       <View style={styles.formCard}>
+        {/* Google is the primary action: every existing account was created with
+            it, so it must stay the first thing users reach for. */}
+        <Button
+          mode="contained"
+          onPress={handleGoogle}
+          loading={loading}
+          disabled={loading}
+          icon="google"
+          style={styles.googleButton}
+          buttonColor={colors.primary}
+          textColor={colors.onPrimary}
+          contentStyle={styles.buttonContent}
+          accessibilityLabel={t.signInWithGoogle}
+        >
+          {t.signInWithGoogle}
+        </Button>
+
+        {formError ? (
+          <HelperText type="error" visible>
+            {formError}
+          </HelperText>
+        ) : null}
+
+        <Button
+          mode="text"
+          onPress={() => setShowEmailForm((v) => !v)}
+          textColor={colors.textSecondary}
+          style={styles.toggleEmail}
+        >
+          {showEmailForm ? t.cancel : t.signInWithEmail}
+        </Button>
+
+        {!showEmailForm ? null : (
+        <>
         <TextInput
           label={t.email}
           value={email}
@@ -185,24 +220,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         >
           {t.forgotPassword}
         </Button>
-
-        <Text variant="labelSmall" style={styles.orText}>
-          {t.orContinueWith}
-        </Text>
-
-        <Button
-          mode="outlined"
-          onPress={handleGoogle}
-          loading={loading}
-          disabled={loading}
-          icon="google"
-          style={styles.googleButton}
-          textColor={colors.text}
-          contentStyle={styles.buttonContent}
-          accessibilityLabel={t.signInWithGoogle}
-        >
-          {t.signInWithGoogle}
-        </Button>
+        </>
+        )}
 
         <Button
           mode="text"
@@ -338,6 +357,11 @@ const styles = StyleSheet.create({
   forgotBtn: {
     alignSelf: "center",
     marginTop: 4,
+  },
+  toggleEmail: {
+    alignSelf: "center",
+    marginTop: 4,
+    marginBottom: 4,
   },
   orText: {
     textAlign: "center",

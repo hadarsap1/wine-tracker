@@ -298,12 +298,59 @@ export async function getWines(householdId: string): Promise<Wine[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Wine);
 }
 
+/** Builds the item mutation shared by the online and offline paths. */
+function openBottleItemUpdate(
+  slotToRemove?: StorageSlot,
+  isLegacySlot?: boolean
+): Record<string, unknown> {
+  const updateData: Record<string, unknown> = {
+    quantity: increment(-1),
+    updatedAt: serverTimestamp(),
+  };
+  if (slotToRemove) {
+    if (isLegacySlot) {
+      // Legacy single-slot item: clear the individual fields
+      updateData.storageUnitId = deleteField();
+      updateData.storageRow = deleteField();
+      updateData.storageCol = deleteField();
+    } else {
+      // New storageSlots[] format: remove just this slot from the array
+      updateData.storageSlots = arrayRemove(slotToRemove);
+    }
+  }
+  return updateData;
+}
+
+function openBottleDiaryEntry(
+  itemId: string,
+  diary: { wineId: string; wineName: string; wineType: WineType }
+): Record<string, unknown> {
+  return {
+    wineId: diary.wineId,
+    wineName: diary.wineName,
+    wineType: diary.wineType,
+    rating: null as Rating | null,
+    imageUrls: [],
+    inventoryItemId: itemId,
+    tastingDate: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+}
+
 /**
- * Atomically decrements (or removes) inventory item AND creates a diary entry.
- * Runs in a transaction that reads the CURRENT quantity server-side, so two
- * household members opening bottles concurrently can't drive quantity negative
- * or double-delete the item.
- * Returns whether the inventory item was deleted (server quantity was <= 1).
+ * Atomically decrements (or removes) an inventory item AND creates a diary entry.
+ *
+ * Online: runs in a transaction that reads the CURRENT quantity server-side, so
+ * two household members opening bottles concurrently can't drive quantity
+ * negative or double-delete the item.
+ *
+ * Offline: Firestore transactions require connectivity and fail outright, but a
+ * cellar app is used in cellars — so we fall back to a writeBatch, which queues
+ * locally and syncs on reconnect. The batch uses the caller's cached quantity;
+ * the concurrency guarantee is relaxed only in that offline case.
+ *
+ * Returns whether the inventory item was deleted (quantity was <= 1).
  */
 export async function openBottle(
   householdId: string,
@@ -311,7 +358,9 @@ export async function openBottle(
   diary: { entryId: string; wineId: string; wineName: string; wineType: WineType },
   slotToRemove?: StorageSlot,
   /** Pass true when the item uses legacy storageUnitId/storageRow/storageCol fields (not storageSlots[]) */
-  isLegacySlot?: boolean
+  isLegacySlot?: boolean,
+  /** Cached quantity, used only for the offline fallback path. */
+  cachedQuantity?: number
 ): Promise<boolean> {
   const itemRef = doc(
     db,
@@ -328,49 +377,50 @@ export async function openBottle(
     diary.entryId
   );
 
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(itemRef);
-    if (!snap.exists()) {
-      throw new Error("item_not_found");
-    }
-    const currentQuantity = (snap.data().quantity as number) ?? 0;
-
-    const deleted = currentQuantity <= 1;
-    if (deleted) {
-      tx.delete(itemRef);
-    } else {
-      const updateData: Record<string, unknown> = {
-        quantity: increment(-1),
-        updatedAt: serverTimestamp(),
-      };
-      if (slotToRemove) {
-        if (isLegacySlot) {
-          // Legacy single-slot item: clear the individual fields
-          updateData.storageUnitId = deleteField();
-          updateData.storageRow = deleteField();
-          updateData.storageCol = deleteField();
-        } else {
-          // New storageSlots[] format: remove just this slot from the array
-          updateData.storageSlots = arrayRemove(slotToRemove);
-        }
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(itemRef);
+      if (!snap.exists()) {
+        throw new Error("item_not_found");
       }
-      tx.update(itemRef, updateData);
-    }
+      const currentQuantity = (snap.data().quantity as number) ?? 0;
 
-    tx.set(diaryRef, {
-      wineId: diary.wineId,
-      wineName: diary.wineName,
-      wineType: diary.wineType,
-      rating: null as Rating | null,
-      imageUrls: [],
-      inventoryItemId: itemId,
-      tastingDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      const deleted = currentQuantity <= 1;
+      if (deleted) {
+        tx.delete(itemRef);
+      } else {
+        tx.update(itemRef, openBottleItemUpdate(slotToRemove, isLegacySlot));
+      }
+
+      tx.set(diaryRef, openBottleDiaryEntry(itemId, diary));
+
+      return deleted;
     });
+  } catch (e) {
+    if (!isOfflineError(e)) throw e;
 
+    // Offline: queue the same writes as a batch so the action still works and
+    // syncs on reconnect.
+    const quantity = cachedQuantity ?? 1;
+    const deleted = quantity <= 1;
+    const batch = writeBatch(db);
+    if (deleted) {
+      batch.delete(itemRef);
+    } else {
+      batch.update(itemRef, openBottleItemUpdate(slotToRemove, isLegacySlot));
+    }
+    batch.set(diaryRef, openBottleDiaryEntry(itemId, diary));
+    // Intentionally not awaited: offline batches only settle once connectivity
+    // returns, and the local cache already reflects the change immediately.
+    batch.commit().catch(() => undefined);
     return deleted;
-  });
+  }
+}
+
+/** True when a Firestore operation failed because the client is offline. */
+function isOfflineError(e: unknown): boolean {
+  const code = (e as { code?: string })?.code;
+  return code === "unavailable" || code === "failed-precondition";
 }
 
 export async function createWineOnly(

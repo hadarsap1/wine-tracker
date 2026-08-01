@@ -453,6 +453,7 @@ export const t = {
   deleteAccountConfirmBtn: "מחק לצמיתות",
   deleteAccountTypeToConfirm: "הקלד DELETE לאישור",
   deleteAccountFailed: "מחיקת החשבון נכשלה. נסה שוב.",
+  deleteAccountUnavailable: "מחיקת חשבון אינה זמינה כרגע. נסה שוב מאוחר יותר.",
 
   // Privacy / analytics
   privacy: "פרטיות",
@@ -460,6 +461,9 @@ export const t = {
   analyticsToggleDesc: "עוזר לנו לשפר את האפליקציה. לא כולל את פרטי היינות שלך.",
 
   // Error boundary
+  configErrorTitle: "שגיאת תצורה",
+  configErrorMsg:
+    "לא הצלחנו להתחבר לשרת. ייתכן שהאפליקציה לא הוגדרה כראוי. נסה לרענן — אם הבעיה נמשכת, פנה לתמיכה.",
   errorBoundaryTitle: "משהו השתבש",
   errorBoundaryMsg: "אירעה שגיאה בלתי צפויה. נסה לטעון מחדש.",
   errorBoundaryReload: "טען מחדש",

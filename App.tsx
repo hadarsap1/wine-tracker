@@ -3,11 +3,13 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
 import { NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
-import { I18nManager, Platform, View } from "react-native";
+import { I18nManager, Platform, StyleSheet, Text, View } from "react-native";
 import * as Font from "expo-font";
 import { paperTheme, navigationTheme } from "@config/theme";
 import { useAuthStore } from "@stores/authStore";
 import { validateEnv } from "@config/env";
+import { firebaseInitError } from "@config/firebase";
+import { t } from "@i18n/index";
 import { RootNavigator } from "@navigation/index";
 import GlobalSnackbar from "@components/common/GlobalSnackbar";
 import ErrorBoundary from "@components/common/ErrorBoundary";
@@ -47,15 +49,41 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
   document.head.appendChild(rtlStyle);
 }
 
-if (__DEV__) {
-  const missing = validateEnv();
-  if (missing.length > 0) {
-    console.error(
-      `[Wine Tracker] Missing required env vars:\n  ${missing.join("\n  ")}\n` +
-      `Copy .env.example to .env.local and fill in the values.`
-    );
-  }
+const missingEnv = validateEnv();
+if (missingEnv.length > 0) {
+  console.error(
+    `[Wine Tracker] Missing required env vars:\n  ${missingEnv.join("\n  ")}\n` +
+    `Copy .env.example to .env.local and fill in the values.`
+  );
 }
+
+/**
+ * Shown when Firebase can't start (missing/malformed config). Previously this
+ * situation produced a blank white screen with only a console error, because the
+ * failure happens during module evaluation — before any error boundary exists.
+ */
+function ConfigErrorScreen({ detail }: { detail: string }) {
+  return (
+    <View style={configErrorStyles.container}>
+      <Text style={configErrorStyles.title}>{t.configErrorTitle}</Text>
+      <Text style={configErrorStyles.message}>{t.configErrorMsg}</Text>
+      <Text style={configErrorStyles.detail}>{detail}</Text>
+    </View>
+  );
+}
+
+const configErrorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0d0d1a",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  title: { color: "#c9a84c", fontSize: 20, fontWeight: "bold", textAlign: "center" },
+  message: { color: "#a0a0c0", fontSize: 14, textAlign: "center", marginTop: 12 },
+  detail: { color: "#6b6b8a", fontSize: 11, textAlign: "center", marginTop: 20 },
+});
 
 function AppContent() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -104,6 +132,14 @@ export default function App() {
 
   if (!fontsReady) {
     return <View style={{ flex: 1, backgroundColor: "#1a1a2e" }} />;
+  }
+
+  // Surface a bad/missing Firebase config instead of a silent blank page.
+  if (firebaseInitError || missingEnv.length > 0) {
+    const detail = firebaseInitError
+      ? firebaseInitError.message
+      : `Missing: ${missingEnv.join(", ")}`;
+    return <ConfigErrorScreen detail={detail} />;
   }
 
   return (

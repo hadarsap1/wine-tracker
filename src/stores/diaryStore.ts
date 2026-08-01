@@ -59,7 +59,12 @@ export const useDiaryStore = create<DiaryStore>((set, get) => ({
     return diaryService.subscribeDiaryEntries(
       householdId,
       (entries) => set({ entries: entries.map(toAppEntry), loading: false }),
-      (e) => set({ loading: false, error: e.message })
+      (e) => {
+        // Don't strand the diary on a dropped listener — fall back to one-shot.
+        console.warn("[diary] live sync failed, falling back to one-shot load:", e);
+        set({ loading: false });
+        get().loadEntries(householdId);
+      }
     );
   },
 

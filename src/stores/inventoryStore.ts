@@ -90,7 +90,13 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     return inventoryService.subscribeInventoryItems(
       householdId,
       (items) => set({ items: items.map(toAppItem), loading: false }),
-      (e) => set({ loading: false, error: e.message })
+      (e) => {
+        // A dropped listener must not leave the cellar looking empty — fall back
+        // to a one-shot read so the user still sees their wines.
+        console.warn("[inventory] live sync failed, falling back to one-shot load:", e);
+        set({ loading: false });
+        get().loadItems(householdId);
+      }
     );
   },
 
@@ -180,7 +186,8 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         itemId,
         { entryId, wineId, wineName, wineType },
         slotToRemove,
-        isLegacySlot
+        isLegacySlot,
+        item?.quantity
       );
       analytics.track.bottleOpened();
 
