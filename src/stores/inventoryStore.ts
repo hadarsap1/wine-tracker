@@ -35,6 +35,7 @@ interface InventoryActions {
       >
     >
   ) => Promise<void>;
+  /** Resolves with the id of the diary entry created for the opened bottle. */
   openBottle: (
     householdId: string,
     itemId: string,
@@ -42,7 +43,7 @@ interface InventoryActions {
     wineName: string,
     wineType: WineType,
     slotToRemove?: { unitId: string; row: number; col: number }
-  ) => Promise<void>;
+  ) => Promise<string>;
   updateWine: (
     householdId: string,
     wineId: string,
@@ -212,6 +213,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
           ),
         }));
       }
+      return entryId;
     } catch (e) {
       set({ error: (e as Error).message });
       throw e;

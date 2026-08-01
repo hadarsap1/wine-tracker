@@ -15,16 +15,18 @@ import { useAuthStore } from "@stores/authStore";
 import { useInventoryStore } from "@stores/inventoryStore";
 import * as inventoryService from "@services/inventory";
 import * as vivinoService from "@services/vivino";
+import * as diaryService from "@services/diary";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
 import WineTypeChip from "@components/inventory/WineTypeChip";
 import VivinoBadge from "@components/inventory/VivinoBadge";
+import { RateNowDialog } from "@components/diary";
 import type { WineDetailScreenProps } from "@navigation/types";
 import { useCellarStore } from "@stores/cellarStore";
 import StorageGrid from "@components/inventory/StorageGrid";
 import { getItemSlots } from "@/types/index";
-import type { AppWine, VivinoData, WineType } from "@/types/index";
+import type { AppWine, VivinoData, WineType, Rating } from "@/types/index";
 
 export default function WineDetailScreen({
   route,
@@ -44,6 +46,8 @@ export default function WineDetailScreen({
   const vivinoFetchIdRef = useRef(0);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [openBottleDialogVisible, setOpenBottleDialogVisible] = useState(false);
+  const [rateEntry, setRateEntry] = useState<{ id: string; wineName: string } | null>(null);
+  const [savingRating, setSavingRating] = useState(false);
   const [slotPickerForOpen, setSlotPickerForOpen] = useState<{ unitId: string; row: number; col: number } | null | undefined>(undefined);
   const [arrivedDialogVisible, setArrivedDialogVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -149,14 +153,47 @@ export default function WineDetailScreen({
     setOpenBottleDialogVisible(false);
     setActionLoading(true);
     try {
-      await openBottle(householdId, itemId, item.wineId, item.wineName, item.wineType, slotPickerForOpen ?? undefined);
-      showSnackbar(t.bottleOpened, "success");
-      navigation.goBack();
+      const entryId = await openBottle(
+        householdId,
+        itemId,
+        item.wineId,
+        item.wineName,
+        item.wineType,
+        slotPickerForOpen ?? undefined
+      );
+      // Ask for the rating now, while they're actually drinking it — otherwise
+      // the unrated entry gets forgotten in the diary.
+      setRateEntry({ id: entryId, wineName: item.wineName });
     } catch (e) {
       showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleSaveRating = async (rating: number, notes: string) => {
+    if (!householdId || !rateEntry) return;
+    setSavingRating(true);
+    try {
+      await diaryService.updateDiaryEntry(householdId, rateEntry.id, {
+        rating: rating as Rating,
+        ...(notes ? { notes } : {}),
+      });
+      showSnackbar(t.ratingSaved, "success");
+    } catch {
+      // The bottle was still opened — don't fail the whole action over a rating.
+      showSnackbar(t.bottleOpened, "success");
+    } finally {
+      setSavingRating(false);
+      setRateEntry(null);
+      navigation.goBack();
+    }
+  };
+
+  const handleSkipRating = () => {
+    setRateEntry(null);
+    showSnackbar(t.bottleOpened, "success");
+    navigation.goBack();
   };
 
   const handleMarkArrived = async () => {
@@ -431,6 +468,14 @@ export default function WineDetailScreen({
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <RateNowDialog
+        visible={!!rateEntry}
+        wineName={rateEntry?.wineName ?? ""}
+        saving={savingRating}
+        onDismiss={handleSkipRating}
+        onSave={handleSaveRating}
+      />
 
       <Portal>
         <Dialog

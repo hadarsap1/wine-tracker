@@ -7,11 +7,13 @@ import { useCellarStore } from "@stores/cellarStore";
 import { useSnackbarStore } from "@stores/snackbarStore";
 import { colors } from "@config/theme";
 import { t } from "@i18n/index";
+import { RateNowDialog } from "@components/diary";
 import { WineType, getItemSlots } from "@/types/index";
-import type { AppInventoryItem } from "@/types/index";
+import type { AppInventoryItem, Rating } from "@/types/index";
 import StorageGrid, { TYPE_COLORS, type SlotData } from "@components/inventory/StorageGrid";
 import type { StorageMapScreenProps } from "@navigation/types";
 import * as inventoryService from "@services/inventory";
+import * as diaryService from "@services/diary";
 
 export default function StorageMapScreen({
   navigation,
@@ -26,6 +28,8 @@ export default function StorageMapScreen({
   const [slotItem, setSlotItem] = useState<AppInventoryItem | null>(null);
   const [slotVivinoScore, setSlotVivinoScore] = useState<number | null | undefined>(undefined);
   const [openBottleConfirm, setOpenBottleConfirm] = useState(false);
+  const [rateEntry, setRateEntry] = useState<{ id: string; wineName: string } | null>(null);
+  const [savingRating, setSavingRating] = useState(false);
   const [openingBottle, setOpeningBottle] = useState(false);
   const [clickedSlot, setClickedSlot] = useState<{ unitId: string; row: number; col: number } | null>(null);
   const [wineImages, setWineImages] = useState<Record<string, string>>({});
@@ -148,18 +152,47 @@ export default function StorageMapScreen({
   const handleOpenBottle = async () => {
     if (!slotItem || !householdId) return;
     setOpeningBottle(true);
+    const wineName = slotItem.wineName;
     try {
-      await openBottle(householdId, slotItem.id, slotItem.wineId, slotItem.wineName, slotItem.wineType, clickedSlot ?? undefined);
+      const entryId = await openBottle(householdId, slotItem.id, slotItem.wineId, slotItem.wineName, slotItem.wineType, clickedSlot ?? undefined);
       setOpenBottleConfirm(false);
       setSlotItem(null);
       setClickedSlot(null);
-      showSnackbar(t.bottleOpened, "success");
+      // Rate in the moment rather than leaving an unrated entry behind.
+      setRateEntry({ id: entryId, wineName });
     } catch (e) {
       showSnackbar((e as Error).message || t.error, "error");
     } finally {
       setOpeningBottle(false);
     }
   };
+
+  const handleSaveRating = async (rating: number, notes: string) => {
+    if (!householdId || !rateEntry) return;
+    setSavingRating(true);
+    try {
+      await diaryService.updateDiaryEntry(householdId, rateEntry.id, {
+        rating: rating as Rating,
+        ...(notes ? { notes } : {}),
+      });
+      showSnackbar(t.ratingSaved, "success");
+    } catch {
+      showSnackbar(t.bottleOpened, "success");
+    } finally {
+      setSavingRating(false);
+      setRateEntry(null);
+    }
+  };
+
+  const rateDialog = (
+    <RateNowDialog
+      visible={!!rateEntry}
+      wineName={rateEntry?.wineName ?? ""}
+      saving={savingRating}
+      onDismiss={() => setRateEntry(null)}
+      onSave={handleSaveRating}
+    />
+  );
 
   const isLoading = inventoryLoading || cellarLoading;
 
@@ -329,6 +362,8 @@ export default function StorageMapScreen({
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {rateDialog}
     </View>
   );
 }
