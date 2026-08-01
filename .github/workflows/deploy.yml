@@ -56,16 +56,17 @@ jobs:
       # before applying anything if any one of them fails. Bundling meant a
       # permission gap on storage/functions silently blocked the
       # security-critical Firestore rules. Ordered most-critical first.
+      # Published via the Rules REST API rather than `firebase deploy`: the CLI
+      # runs a Service Usage precheck first, and a deploy service account
+      # without serviceusage.services.get 403s there and aborts before writing
+      # any rules. Publishing only needs firebaserules.googleapis.com.
       - name: Deploy Firestore rules
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
-          npx firebase-tools deploy \
-            --only firestore:rules \
-            --project winetracker2026 \
-            --non-interactive --force
+          node scripts/publish-firestore-rules.mjs winetracker2026 firestore.rules
           rm -f "$RUNNER_TEMP/firebase-sa.json"
 
       - name: Deploy Storage rules
