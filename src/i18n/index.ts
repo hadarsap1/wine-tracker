@@ -76,6 +76,8 @@ export const t = {
   notes: "הערות",
   location: "מיקום",
   purchasePrice: "מחיר רכישה",
+  moreDetails: "עוד פרטים (לא חובה)",
+  fewerDetails: "פחות פרטים",
   wineNameRequired: "שם היין הוא שדה חובה",
   invalidQuantity: "כמות לא תקינה",
   invalidQuantityMsg: "נא להזין כמות של לפחות 1.",

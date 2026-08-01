@@ -36,7 +36,11 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
 
   const prefill = route.params;
   const [name, setName] = useState(prefill?.prefillName ?? "");
-  const [type, setType] = useState<WineType>((prefill?.prefillType as WineType) ?? WineType.Red);
+  const [type, setType] = useState<WineType>(
+    (prefill?.prefillType as WineType) ??
+      profile?.preferences?.defaultWineType ??
+      WineType.Red
+  );
   const [status, setStatus] = useState<InventoryStatus>("in_stock");
   const [producer, setProducer] = useState("");
   const [region, setRegion] = useState("");
@@ -54,6 +58,9 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
   const [purchasePrice, setPurchasePrice] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  // Most wines are added with just a name, type and count; everything else is
+  // optional and hidden until asked for.
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [nameError, setNameError] = useState("");
   const [quantityError, setQuantityError] = useState("");
   const [vintageError, setVintageError] = useState("");
@@ -242,6 +249,33 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
           style={styles.statusButtons}
         />
 
+        <View style={styles.row}>
+          <TextInput
+            label={t.quantity}
+            value={quantity}
+            onChangeText={(v) => { setQuantity(v); if (quantityError) setQuantityError(""); }}
+            keyboardType="numeric"
+            error={!!quantityError}
+            style={[styles.input, styles.flex]}
+            contentStyle={styles.inputContent}
+            textColor={colors.text}
+          />
+        </View>
+        <HelperText type="error" visible={!!quantityError} style={styles.helperText}>
+          {quantityError}
+        </HelperText>
+
+        <Button
+          mode="text"
+          onPress={() => setShowMoreDetails((v) => !v)}
+          textColor={colors.gold}
+          icon={showMoreDetails ? "chevron-up" : "chevron-down"}
+          style={styles.moreToggle}
+        >
+          {showMoreDetails ? t.fewerDetails : t.moreDetails}
+        </Button>
+
+        {showMoreDetails && (<>
         <TextInput
           label={t.producer}
           value={producer}
@@ -293,31 +327,16 @@ export default function AddWineScreen({ navigation, route }: AddWineScreenProps)
         <HelperText type="error" visible={!!vintageError} style={styles.helperText}>
           {vintageError}
         </HelperText>
-        <View style={styles.row}>
-          <TextInput
-            label={t.quantity}
-            value={quantity}
-            onChangeText={(v) => { setQuantity(v); if (quantityError) setQuantityError(""); }}
-            keyboardType="numeric"
-            error={!!quantityError}
-            style={[styles.input, styles.flex]}
-            contentStyle={styles.inputContent}
-            textColor={colors.text}
-          />
-          <View style={styles.gap} />
-          <TextInput
-            label={t.purchasePrice}
-            value={purchasePrice}
-            onChangeText={setPurchasePrice}
-            keyboardType="decimal-pad"
-            style={[styles.input, styles.flex]}
-            contentStyle={styles.inputContent}
-            textColor={colors.text}
-          />
-        </View>
-        <HelperText type="error" visible={!!quantityError} style={styles.helperText}>
-          {quantityError}
-        </HelperText>
+        <TextInput
+          label={t.purchasePrice}
+          value={purchasePrice}
+          onChangeText={setPurchasePrice}
+          keyboardType="decimal-pad"
+          style={styles.input}
+          contentStyle={styles.inputContent}
+          textColor={colors.text}
+        />
+        </>)}
         {/* Storage slot picker */}
         <Text variant="labelLarge" style={styles.sectionLabel}>
           {t.storageLocation}
@@ -407,6 +426,11 @@ const styles = StyleSheet.create({
   scroll: {
     padding: 16,
     paddingBottom: 40,
+  },
+  moreToggle: {
+    alignSelf: "flex-end",
+    marginTop: 4,
+    marginBottom: 4,
   },
   input: {
     marginBottom: 12,
