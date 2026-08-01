@@ -48,6 +48,31 @@ export default function ScanReviewScreen({
   const showSnackbar = useSnackbarStore((s) => s.show);
   const [saving, setSaving] = useState(false);
 
+  /**
+   * Marks a field the scan actually read. Every field previously looked
+   * identical whether the AI extracted it or left it blank, so users had to
+   * re-check all of them. A gold check means "this came from the label".
+   */
+  const detectedIcon = (value: unknown) =>
+    value !== undefined && value !== null && value !== "" ? (
+      <TextInput.Icon
+        icon="check-decagram"
+        color={colors.gold}
+        forceTextInputFocus={false}
+        accessibilityLabel={t.fieldDetected}
+      />
+    ) : undefined;
+
+  const detectedCount = [
+    parsedData.name,
+    parsedData.producer,
+    parsedData.region,
+    parsedData.country,
+    parsedData.vintage,
+    parsedData.grape,
+    parsedData.type,
+  ].filter((v) => v !== undefined && v !== null && v !== "").length;
+
   const [name, setName] = useState(parsedData.name ?? "");
   const [type, setType] = useState<WineType>(parsedData.type ?? WineType.Red);
   const [producer, setProducer] = useState(parsedData.producer ?? "");
@@ -281,6 +306,9 @@ export default function ScanReviewScreen({
               : t.confidenceLow}
           </Text>
         </View>
+        <Text variant="labelSmall" style={styles.detectedSummary}>
+          {t.scanDetectedSummary.replace("{{count}}", String(detectedCount))}
+        </Text>
 
         {/* Vivino Rating */}
         {(loadingVivino || vivinoData !== undefined) && (
@@ -346,6 +374,7 @@ export default function ScanReviewScreen({
         {/* Form Fields */}
         <TextInput
           label={t.wineName}
+          right={detectedIcon(parsedData.name)}
           value={name}
           onChangeText={(v) => {
             setName(v);
@@ -380,6 +409,7 @@ export default function ScanReviewScreen({
 
         <TextInput
           label={t.producer}
+          right={detectedIcon(parsedData.producer)}
           value={producer}
           onChangeText={setProducer}
           style={styles.input}
@@ -389,6 +419,7 @@ export default function ScanReviewScreen({
         <View style={styles.row}>
           <TextInput
             label={t.region}
+          right={detectedIcon(parsedData.region)}
             value={region}
             onChangeText={setRegion}
             style={[styles.input, styles.flex]}
@@ -398,6 +429,7 @@ export default function ScanReviewScreen({
           <View style={styles.gap} />
           <TextInput
             label={t.country}
+          right={detectedIcon(parsedData.country)}
             value={country}
             onChangeText={setCountry}
             style={[styles.input, styles.flex]}
@@ -408,6 +440,7 @@ export default function ScanReviewScreen({
         <View style={styles.row}>
           <TextInput
             label={t.vintage}
+          right={detectedIcon(parsedData.vintage)}
             value={vintage}
             onChangeText={setVintage}
             keyboardType="numeric"
@@ -418,6 +451,7 @@ export default function ScanReviewScreen({
           <View style={styles.gap} />
           <TextInput
             label={t.grape}
+          right={detectedIcon(parsedData.grape)}
             value={grape}
             onChangeText={setGrape}
             style={[styles.input, styles.flex]}
@@ -573,6 +607,11 @@ const styles = StyleSheet.create({
   autoFillBtn: {
     borderColor: colors.primary,
     alignSelf: "flex-start",
+  },
+  detectedSummary: {
+    color: colors.textSecondary,
+    textAlign: "right",
+    marginBottom: 8,
   },
   confidenceBanner: {
     borderRadius: 8,

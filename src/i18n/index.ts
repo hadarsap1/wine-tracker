@@ -77,6 +77,8 @@ export const t = {
   location: "מיקום",
   purchasePrice: "מחיר רכישה",
   moreDetails: "עוד פרטים (לא חובה)",
+  fieldDetected: "זוהה מהתווית",
+  scanDetectedSummary: "זוהו {{count}} שדות מהתווית · השלם או תקן את השאר",
   fewerDetails: "פחות פרטים",
   wineNameRequired: "שם היין הוא שדה חובה",
   invalidQuantity: "כמות לא תקינה",
